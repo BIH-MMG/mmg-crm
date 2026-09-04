@@ -44,7 +44,9 @@ not yet).
 - Storage: Firebase project `mmg-crm-3b949`, Realtime Database in asia-southeast1.
   `/leads/{id}` holds one lead each; `/settingsJson` holds the settings as a JSON string.
   Rules are `auth != null` for read and write, satisfied by anonymous sign-in (enabled in
-  Firebase Authentication). The Firebase config in `index.html` is not a secret.
+  Firebase Authentication). The Firebase config in `index.html` is not a secret; the API
+  key is restricted to `https://bih-mmg.github.io/*` referrers, so the page only connects
+  when served from there (a local `file://` copy runs in local-only mode).
 - `localStorage` (`crm_leads`, `crm_settings`) is a cache. Opened as a plain
   file without the SDK, the app runs local-only, which is how the test harness drives it.
 - *Clear all leads* clears the shared database for everyone. Download a backup first.
