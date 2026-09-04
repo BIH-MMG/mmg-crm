@@ -5,12 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="light dark">
 <!-- MMG CRM — mock lead-intake CRM. One file, no build step.
-     Storage: Firebase Realtime Database (project mmg-crm-3b949) behind an email/password
-     login, so every signed-in browser sees the same leads. localStorage (crm_* keys) is a
-     cache and the fallback when the Firebase SDK is absent (tests, offline file). Keep the
-     crm_ prefix: GitHub Pages project pages on one account share a single origin.
-     The Firebase config below is not a secret; the login and the database rules protect
-     the data (rules: auth != null for read and write). -->
+     Storage: Firebase Realtime Database (project mmg-crm-3b949) with anonymous sign-in,
+     so every browser that opens the page sees the same leads. Fake data only — anyone
+     with the URL can read and write. localStorage (crm_* keys) is a cache and the
+     fallback when the Firebase SDK is absent (tests, offline file). Keep the crm_ prefix:
+     GitHub Pages project pages on one account share a single origin. -->
 <title>MMG CRM</title>
 <script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth-compat.js"></script>
@@ -63,11 +62,7 @@
   header nav button.on { color: #fff; border-bottom-color: #fff; }
   header .newbtn { background: #fff; color: var(--brand); border: 0; border-radius: 6px; padding: 7px 14px;
     font: inherit; font-weight: 700; cursor: pointer; }
-  header .signout { background: none; border: 1px solid rgba(255,255,255,.5); color: #fff; border-radius: 6px; padding: 6px 10px;
-    font: inherit; font-size: 12px; cursor: pointer; margin-left: 8px; }
-  .login { max-width: 360px; margin: 48px auto 0; }
-  .login .field { margin-bottom: 12px; }
-  body.locked #tabs, body.locked #newLead { visibility: hidden; }
+  .connecting { color: var(--muted); text-align: center; padding: 48px 0; }
   main { max-width: 1240px; margin: 0 auto; padding: 18px 16px 60px; }
   h2 { font-size: 18px; margin: 0 0 12px; color: var(--brand); }
   h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 22px 0 8px; }
@@ -171,15 +166,14 @@
     <button data-tab="admin">Admin</button>
   </nav>
   <button class="newbtn" id="newLead">+ New lead</button>
-  <button class="signout" id="signOut" hidden>Sign out</button>
 </header>
-<div class="notice"><b>Demonstration only.</b> This mock CRM exists to show how lead intake could work. It is not MMG’s system of record, so never enter real client, prospect or company details here. Everything in it is fictional and shared with everyone who has the login.</div>
+<div class="notice"><b>Demonstration only.</b> This mock CRM exists to show how lead intake could work. It is not MMG’s system of record, so never enter real client, prospect or company details here. Everything in it is fictional and shared with everyone who opens this page.</div>
 <main id="main"></main>
 
 <script>
 'use strict';
 // BUILD is checked against the live file after each deploy.
-const BUILD = '2026-09-04-9';
+const BUILD = '2026-09-04-10';
 
 // ---- Reference data ----------------------------------------------------------
 const STAGES = [
@@ -280,7 +274,7 @@ function saveSettings() {
   return ok;
 }
 
-// ---- Cloud: Firebase Realtime Database + email/password login -----------------
+// ---- Cloud: Firebase Realtime Database, anonymous sign-in ------------------------
 // Layout: /leads/{id} = lead object, /settingsJson = settings as one JSON string (owner
 // names contain '.', which RTDB keys cannot). Local arrays stay the working copy; every
 // save diffs against what the cloud last had and writes only the changed nodes.
@@ -302,8 +296,8 @@ function cloudInit() {
   cloud = { db: firebase.database(), user: null, loaded: false, off: [] };
   firebase.auth().onAuthStateChanged(u => {
     cloud.user = u;
-    if (u) cloudAttach(); else cloudDetach();
-    renderShell();
+    if (u) cloudAttach();
+    else { cloudDetach(); firebase.auth().signInAnonymously().catch(e => { cloudError(e); main().innerHTML = '<div class="connecting">Could not reach the shared database: ' + esc(e.message) + '</div>'; }); }
   });
   return true;
 }
@@ -356,29 +350,6 @@ function cloudPushSettings() {
   settingsSynced = j;
   cloud.db.ref('settingsJson').set(j).catch(cloudError);
 }
-function renderShell() {
-  const locked = !!cloud && !cloud.user;
-  document.body.classList.toggle('locked', locked);
-  el('signOut').hidden = !cloudReady();
-  if (locked) return renderLogin();
-  render();
-}
-function renderLogin() {
-  let remembered = ''; try { remembered = localStorage.getItem('crm_email') || ''; } catch (e) {}
-  main().innerHTML = '<div class="card login"><h3 style="margin-top:0">Sign in</h3><form id="loginForm">' +
-    '<div class="field"><label>Email</label><input type="email" id="loginEmail" autocomplete="username" value="' + esc(remembered) + '" required></div>' +
-    '<div class="field"><label>Password</label><input type="password" id="loginPw" autocomplete="current-password" required></div>' +
-    '<div class="toolbar" style="margin:0"><button class="btn" type="submit" id="loginBtn">Sign in</button></div><div class="msg" id="loginMsg"></div></form></div>';
-  el('loginForm').onsubmit = e => {
-    e.preventDefault();
-    const email = el('loginEmail').value.trim(), pw = el('loginPw').value;
-    el('loginBtn').disabled = true; el('loginMsg').textContent = '';
-    firebase.auth().signInWithEmailAndPassword(email, pw)
-      .then(() => { try { localStorage.setItem('crm_email', email); } catch (e) {} })
-      .catch(err => { el('loginBtn').disabled = false; el('loginMsg').textContent = /invalid|wrong|not-found|credential/i.test(err.code || '') ? 'Wrong email or password.' : ('Sign-in failed: ' + err.message); });
-  };
-}
-
 function blankLead() {
   const now = new Date().toISOString();
   return {
@@ -926,7 +897,7 @@ function renderData() {
     '<div class="toolbar"><input type="file" id="restoreFile" accept=".json,application/json"></div>' +
     '<textarea id="restoreText" placeholder="Or paste backup text here"></textarea>' +
     '<div class="toolbar" style="margin-top:8px"><button class="btn sec" id="restoreBtn">Restore from text</button><span class="msg" id="restoreMsg"></span></div></div>';
-  h += '</div><div class="msg" id="cloudMsg"></div><footer>' + (cloudReady() ? 'Shared database · signed in as ' + esc(cloud.user.email) : 'Stored only in this browser (localStorage)') + '. Build ' + BUILD + '</footer>';
+  h += '</div><div class="msg" id="cloudMsg"></div><footer>' + (cloudReady() ? 'Shared database (Firebase)' : 'Stored only in this browser (localStorage)') + '. Build ' + BUILD + '</footer>';
   main().innerHTML = h;
 
   el('loadSample').onclick = () => {
@@ -1040,9 +1011,8 @@ function boot() {
   loadAll();
   document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
   el('newLead').onclick = newLead;
-  el('signOut').onclick = () => { if (cloud) firebase.auth().signOut(); };
   if (!cloudInit()) render();              // no SDK (tests, offline copy): local mode, render at once
-  else renderShell();                       // shows the login until onAuthStateChanged fires
+  else main().innerHTML = '<div class="connecting">Connecting…</div>';   // first cloud snapshot renders
 }
 if (typeof document !== 'undefined' && document.getElementById('main')) boot();
 </script>
