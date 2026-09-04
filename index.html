@@ -132,6 +132,13 @@
   .bars .v { text-align: right; color: var(--muted); }
   .cols3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
   .late-text { color: var(--danger); font-weight: 600; }
+  /* admin */
+  .gate { max-width: 360px; margin: 48px auto 0; }
+  .row .btn { flex: 0 0 auto; }
+  table.admin tbody tr { cursor: default; }
+  table.admin td select, table.admin td input { width: auto; padding: 4px 6px; }
+  table.admin td .row { flex-wrap: nowrap; }
+  table.admin td .row input { min-width: 140px; }
   footer { color: var(--muted); font-size: 11px; text-align: center; padding: 20px 0 0; }
 </style>
 </head>
@@ -143,6 +150,7 @@
     <button data-tab="pipeline">Pipeline</button>
     <button data-tab="dashboard">Dashboard</button>
     <button data-tab="data">Data</button>
+    <button data-tab="admin">Admin</button>
   </nav>
   <button class="newbtn" id="newLead">+ New lead</button>
 </header>
@@ -151,7 +159,7 @@
 <script>
 'use strict';
 // BUILD is checked against the live file after each deploy.
-const BUILD = '2026-09-04-1';
+const BUILD = '2026-09-04-2';
 
 // ---- Reference data ----------------------------------------------------------
 const STAGES = [
@@ -182,6 +190,8 @@ const CURRENCIES = ['USD', 'EUR', 'CAD', 'GBP', 'THB', 'JPY'];
 // Rough rates to USD, for screening hints only.
 const TO_USD = { USD: 1, EUR: 1.08, CAD: 0.73, GBP: 1.27, THB: 0.028, JPY: 0.0067 };
 const OWNERS_DEFAULT = ['Brian H.', 'Ana R.', 'Tom K.'];
+const ROLES = { rep: 'Rep', partner: 'Partner', admin: 'Admin' };
+const PIN_DEFAULT = '0000';
 
 // ---- Helpers -----------------------------------------------------------------
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
@@ -209,8 +219,9 @@ const USD_PER_EUR = TO_USD.EUR;
 
 // ---- State & storage ---------------------------------------------------------
 let leads = [];
-let settings = { owners: OWNERS_DEFAULT.slice() };
-let view = { tab: 'leads', leadId: null, q: '', stage: '', dest: '', owner: '', sort: 'updated', dir: -1 };
+let settings = normaliseSettings(null);
+let view = { tab: 'leads', leadId: null, q: '', stage: '', dest: '', owner: '', sort: 'updated', dir: -1,
+  adminOk: false, renaming: null, removing: null };
 
 function loadAll() {
   try {
@@ -219,8 +230,21 @@ function loadAll() {
   } catch (e) { console.error(e); leads = []; }
   try {
     const s = JSON.parse(localStorage.getItem('crm_settings') || 'null');
-    if (s && Array.isArray(s.owners) && s.owners.length) settings = s;
+    if (s && typeof s === 'object') settings = normaliseSettings(s);
   } catch (e) { console.error(e); }
+}
+// settings = { owners: [name…] (all, in display order), ownerMeta: { name: { role, active } },
+//              defaultOwner: name, pin: '0000' }. Leads reference owners by name.
+function normaliseSettings(raw) {
+  const s = Object.assign({ owners: [], ownerMeta: {}, defaultOwner: '', pin: PIN_DEFAULT }, raw && typeof raw === 'object' ? raw : {});
+  s.owners = Array.isArray(s.owners) ? s.owners.map(o => String(o).trim()).filter(Boolean) : [];
+  if (!s.owners.length) s.owners = OWNERS_DEFAULT.slice();
+  const meta = s.ownerMeta && typeof s.ownerMeta === 'object' ? s.ownerMeta : {};
+  s.ownerMeta = {};
+  s.owners.forEach(o => { const m = meta[o] || {}; s.ownerMeta[o] = { role: ROLES[m.role] ? m.role : 'rep', active: m.active !== false }; });
+  if (!s.owners.includes(s.defaultOwner)) s.defaultOwner = s.owners[0];
+  s.pin = /^\d{4,8}$/.test(String(s.pin)) ? String(s.pin) : PIN_DEFAULT;
+  return s;
 }
 function saveLeads() { try { localStorage.setItem('crm_leads', JSON.stringify(leads)); return true; } catch (e) { console.error(e); return false; } }
 function saveSettings() { try { localStorage.setItem('crm_settings', JSON.stringify(settings)); return true; } catch (e) { console.error(e); return false; } }
@@ -259,6 +283,72 @@ function setStage(lead, stage, outcome) {
   lead.updated = new Date().toISOString();
   addLog(lead, STAGE_LABEL[from] + ' → ' + STAGE_LABEL[stage] + (stage === 'closed' ? ' (' + OUTCOMES[lead.outcome] + ')' : ''), 'stage');
   return true;
+}
+
+// ---- Owners (Admin tab) ------------------------------------------------------
+// Every operation returns '' on success or an error string; storage failures roll back.
+function activeOwners() { return settings.owners.filter(o => settings.ownerMeta[o] && settings.ownerMeta[o].active !== false); }
+function ownerChoices(current) { const a = activeOwners(); return current && !a.includes(current) ? a.concat([current]) : a; }
+function defaultOwner() { const a = activeOwners(); return a.includes(settings.defaultOwner) ? settings.defaultOwner : (a[0] || ''); }
+function ownerOpenLeads(name) { return leads.filter(l => l.owner === name && l.stage !== 'closed').length; }
+function ownerExists(name) { const n = name.toLowerCase(); return settings.owners.some(o => o.toLowerCase() === n); }
+function snapshot(v) { return JSON.parse(JSON.stringify(v)); }
+function commitOwners(snapS, snapL) {
+  if (saveSettings() && (!snapL || saveLeads())) return '';
+  settings = snapS; if (snapL) leads = snapL; saveSettings(); saveLeads();
+  return 'Could not save — storage full. Nothing changed.';
+}
+function addOwner(name, role) {
+  name = String(name || '').trim();
+  if (!name) return 'Name required.';
+  if (ownerExists(name)) return 'That owner already exists.';
+  const snap = snapshot(settings);
+  settings.owners.push(name); settings.ownerMeta[name] = { role: ROLES[role] ? role : 'rep', active: true };
+  return commitOwners(snap);
+}
+function renameOwner(from, to) {
+  to = String(to || '').trim();
+  if (!settings.owners.includes(from)) return 'Unknown owner.';
+  if (!to) return 'Name required.';
+  if (to === from) return '';
+  if (ownerExists(to)) return 'That owner already exists.';
+  const snapS = snapshot(settings), snapL = snapshot(leads);
+  settings.owners = settings.owners.map(o => o === from ? to : o);
+  settings.ownerMeta[to] = settings.ownerMeta[from]; delete settings.ownerMeta[from];
+  if (settings.defaultOwner === from) settings.defaultOwner = to;
+  leads.forEach(l => { if (l.owner === from) l.owner = to; });
+  if (view.owner === from) view.owner = to;
+  return commitOwners(snapS, snapL);
+}
+function removeOwner(name, reassignTo) {
+  if (!settings.owners.includes(name)) return 'Unknown owner.';
+  if (settings.owners.length < 2) return 'Cannot remove the last owner.';
+  const affected = leads.filter(l => l.owner === name);
+  if (affected.length && (!reassignTo || reassignTo === name || !settings.owners.includes(reassignTo)))
+    return 'Choose who takes over ' + affected.length + ' lead' + (affected.length === 1 ? '' : 's') + '.';
+  const snapS = snapshot(settings), snapL = snapshot(leads);
+  settings.owners = settings.owners.filter(o => o !== name); delete settings.ownerMeta[name];
+  if (settings.defaultOwner === name) settings.defaultOwner = settings.owners[0];
+  const now = new Date().toISOString();
+  affected.forEach(l => { l.owner = reassignTo; l.updated = now; addLog(l, 'Reassigned from ' + name + ' to ' + reassignTo, 'note'); });
+  if (view.owner === name) view.owner = '';
+  return commitOwners(snapS, snapL);
+}
+function setOwnerMeta(name, patch) {
+  if (!settings.ownerMeta[name]) return 'Unknown owner.';
+  const snap = snapshot(settings);
+  Object.assign(settings.ownerMeta[name], patch);
+  if (!ROLES[settings.ownerMeta[name].role]) settings.ownerMeta[name].role = 'rep';
+  return commitOwners(snap);
+}
+function setDefaultOwner(name) {
+  if (!settings.owners.includes(name)) return 'Unknown owner.';
+  const snap = snapshot(settings); settings.defaultOwner = name; return commitOwners(snap);
+}
+function setPin(pin) {
+  pin = String(pin || '').trim();
+  if (!/^\d{4,8}$/.test(pin)) return 'PIN must be 4–8 digits.';
+  const snap = snapshot(settings); settings.pin = pin; return commitOwners(snap);
 }
 
 // ---- Screening hints ---------------------------------------------------------
@@ -401,7 +491,7 @@ function showTab(tab) {
 }
 function render() {
   if (view.leadId) return renderLead(view.leadId);
-  ({ leads: renderLeads, pipeline: renderPipeline, dashboard: renderDashboard, data: renderData }[view.tab] || renderLeads)();
+  ({ leads: renderLeads, pipeline: renderPipeline, dashboard: renderDashboard, data: renderData, admin: renderAdmin }[view.tab] || renderLeads)();
 }
 
 // -- Leads table
@@ -476,7 +566,7 @@ function stagePill(l) {
 function openLead(id) { view.leadId = id; render(); window.scrollTo(0, 0); }
 function newLead() {
   const l = blankLead();
-  l.owner = settings.owners[0] || '';
+  l.owner = defaultOwner();
   l.followUp = todayStr();
   addLog(l, 'Lead created', 'stage');
   leads.unshift(l);
@@ -500,7 +590,7 @@ function renderLead(id) {
   h += '<div class="card"><h3 style="margin-top:0">Status</h3><div class="grid">' +
     field('Stage', sel('stage', l, STAGE_LABEL)) +
     field('Outcome (if closed)', sel('outcome', l, OUTCOMES, '—')) +
-    field('Owner', sel('owner', l, settings.owners, '—')) +
+    field('Owner', sel('owner', l, ownerChoices(l.owner), '—')) +
     field('Next follow-up', inp('followUp', l, 'date')) +
     '</div>';
 
@@ -674,7 +764,7 @@ function parseBackup(text) {
 function applyBackup(data) {
   const snapL = leads, snapS = settings;
   leads = data.leads.map(normalise);
-  if (data.settings && Array.isArray(data.settings.owners) && data.settings.owners.length) settings = data.settings;
+  if (data.settings && typeof data.settings === 'object') settings = normaliseSettings(data.settings);
   if (!saveLeads() || !saveSettings()) { leads = snapL; settings = snapS; saveLeads(); saveSettings(); return false; }
   return true;
 }
@@ -701,8 +791,6 @@ function renderData() {
   h += '<div class="card"><h3 style="margin-top:0">Sample data</h3>' +
     '<div class="toolbar"><button class="btn" id="loadSample">Load sample leads</button><button class="btn danger" id="clearAll">Clear all leads</button></div>' +
     '<div class="msg" id="sampleMsg">' + leads.length + ' leads stored in this browser.</div></div>';
-  h += '<div class="card"><h3 style="margin-top:0">Owners</h3><textarea id="owners">' + esc(settings.owners.join('\n')) + '</textarea>' +
-    '<div class="toolbar" style="margin-top:8px"><button class="btn" id="saveOwners">Save owners</button><span class="msg" id="ownerMsg">One per line.</span></div></div>';
   h += '<div class="card"><h3 style="margin-top:0">Export</h3>' +
     '<div class="toolbar"><button class="btn" id="dlJson">Download backup (JSON)</button><button class="btn sec" id="dlCsv">Download CSV</button><button class="btn sec" id="copyJson">Copy backup text</button></div>' +
     '<div class="msg" id="exportMsg"></div></div>';
@@ -725,11 +813,6 @@ function renderData() {
     if (!saveLeads()) { leads = snap; return; }
     renderData();
   };
-  el('saveOwners').onclick = () => {
-    const list = el('owners').value.split('\n').map(s => s.trim()).filter(Boolean);
-    if (!list.length) { el('ownerMsg').textContent = 'Need at least one owner.'; return; }
-    settings.owners = list; el('ownerMsg').textContent = saveSettings() ? 'Saved.' : 'Could not save.';
-  };
   el('dlJson').onclick = () => download(backupText(), backupFilename(), 'application/json');
   el('dlCsv').onclick = () => download(csvText(), 'mmg-crm-leads-' + todayStr() + '.csv', 'text/csv');
   el('copyJson').onclick = async () => {
@@ -745,6 +828,83 @@ function renderData() {
   };
 }
 function renderDataKeepMsg(m) { renderData(); el('restoreMsg').textContent = m; }
+
+// ---- Admin (mock — the PIN gate is a demo, not security) ---------------------
+function renderAdmin() {
+  if (!view.adminOk) {
+    main().innerHTML = '<div class="card gate"><h3 style="margin-top:0">Admin</h3><form id="pinForm" autocomplete="off">' +
+      '<div class="row"><input type="password" id="pin" inputmode="numeric" placeholder="PIN" autofocus><button class="btn" type="submit">Unlock</button></div>' +
+      '<div class="msg" id="pinMsg"></div></form></div>';
+    el('pinForm').onsubmit = e => {
+      e.preventDefault();
+      if (el('pin').value === settings.pin) { view.adminOk = true; renderAdmin(); }
+      else { el('pinMsg').textContent = 'Wrong PIN.'; el('pin').value = ''; }
+    };
+    return;
+  }
+  const others = name => settings.owners.filter(o => o !== name);
+  let h = '<div class="toolbar"><h2 style="margin:0;flex:1">Admin</h2><button class="btn sec small" id="lock">Lock</button></div>';
+  h += '<div class="card"><h3 style="margin-top:0">Owners</h3><div class="tablewrap"><table class="admin" id="ownerTable"><thead><tr>' +
+    '<th>Name</th><th>Role</th><th>Active</th><th>Default</th><th>Open leads</th><th></th></tr></thead><tbody>';
+  settings.owners.forEach(o => {
+    const m = settings.ownerMeta[o];
+    const renaming = view.renaming === o, removing = view.removing === o;
+    h += '<tr data-o="' + esc(o) + '">' +
+      '<td class="name">' + (renaming ?
+        '<div class="row"><input data-act="renameVal" value="' + esc(o) + '"><button class="btn small" data-act="renameOk">Save</button><button class="btn sec small" data-act="cancel">Cancel</button></div>' :
+        esc(o)) + '</td>' +
+      '<td><select data-act="role">' + opts(ROLES, m.role) + '</select></td>' +
+      '<td><input type="checkbox" data-act="active"' + (m.active ? ' checked' : '') + '></td>' +
+      '<td><input type="radio" name="def" data-act="default"' + (settings.defaultOwner === o ? ' checked' : '') + (m.active ? '' : ' disabled') + '></td>' +
+      '<td>' + ownerOpenLeads(o) + '</td>' +
+      '<td>' + (removing ?
+        '<div class="row">' + (leads.some(l => l.owner === o) ? '<select data-act="reassignTo">' + opts(others(o), '', 'Reassign to…') + '</select>' : '') +
+          '<button class="btn danger small" data-act="removeOk">Remove</button><button class="btn sec small" data-act="cancel">Cancel</button></div>' :
+        '<button class="btn sec small" data-act="rename">Rename</button> <button class="btn danger small" data-act="remove"' + (settings.owners.length < 2 ? ' disabled' : '') + '>Remove</button>') +
+      '</td></tr>';
+  });
+  h += '</tbody></table></div><div class="msg" id="ownerMsg"></div></div>';
+  h += '<div class="cols3" style="margin-top:14px">';
+  h += '<div class="card"><h3 style="margin-top:0">Add owner</h3><form id="addForm" autocomplete="off"><div class="row">' +
+    '<input id="newName" placeholder="Name"><select id="newRole">' + opts(ROLES, 'rep') + '</select><button class="btn" type="submit">Add</button></div>' +
+    '<div class="msg" id="addMsg"></div></form></div>';
+  h += '<div class="card"><h3 style="margin-top:0">Admin PIN</h3><form id="pinForm" autocomplete="off"><div class="row">' +
+    '<input type="password" id="newPin" inputmode="numeric" placeholder="New PIN"><button class="btn sec" type="submit">Change</button></div>' +
+    '<div class="msg" id="pinMsg"></div></form></div>';
+  h += '</div>';
+  main().innerHTML = h;
+
+  const done = m => { view.renaming = view.removing = null; renderAdmin(); if (m) el('ownerMsg').textContent = m; };
+  el('lock').onclick = () => { view.adminOk = false; done(); };
+  document.querySelectorAll('#ownerTable tr[data-o]').forEach(tr => {
+    const o = tr.dataset.o;
+    const act = a => tr.querySelector('[data-act="' + a + '"]');
+    const on = (a, ev, fn) => { const n = act(a); if (n) n[ev] = fn; };
+    on('role', 'onchange', e => done(setOwnerMeta(o, { role: e.target.value })));
+    on('active', 'onchange', e => done(setOwnerMeta(o, { active: e.target.checked })));
+    on('default', 'onchange', () => done(setDefaultOwner(o)));
+    on('rename', 'onclick', () => { view.renaming = o; view.removing = null; renderAdmin(); });
+    on('remove', 'onclick', () => { view.removing = o; view.renaming = null; renderAdmin(); });
+    on('cancel', 'onclick', () => done());
+    const rename = () => { const m = renameOwner(o, act('renameVal').value); if (m) el('ownerMsg').textContent = m; else done(); };
+    on('renameOk', 'onclick', rename);
+    on('renameVal', 'onkeydown', e => { if (e.key === 'Enter') { e.preventDefault(); rename(); } if (e.key === 'Escape') done(); });
+    on('removeOk', 'onclick', () => { const s = act('reassignTo'); const m = removeOwner(o, s ? s.value : ''); if (m) el('ownerMsg').textContent = m; else done('Removed ' + o + '.'); });
+  });
+  if (view.renaming) { const i = document.querySelector('#ownerTable [data-act="renameVal"]'); if (i) { i.focus(); i.select(); } }
+  el('addForm').onsubmit = e => {
+    e.preventDefault();
+    const m = addOwner(el('newName').value, el('newRole').value);
+    if (m) { el('addMsg').textContent = m; return; }
+    done(); el('newName').focus();
+  };
+  el('pinForm').onsubmit = e => {
+    e.preventDefault();
+    const m = setPin(el('newPin').value);
+    el('pinMsg').textContent = m || 'PIN changed.';
+    if (!m) el('newPin').value = '';
+  };
+}
 
 // ---- Boot --------------------------------------------------------------------
 function boot() {

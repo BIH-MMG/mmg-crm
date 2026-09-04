@@ -18,8 +18,11 @@ Live: https://bih-mmg.github.io/mmg-crm/
 - **Pipeline** — kanban by stage; drag a card or use ‹ ›.
 - **Dashboard** — counts by stage, destination, owner, source; free-call-to-paid-consult
   conversion; overdue list.
-- **Data** — load 12 sample leads, clear all, edit the owner list, export JSON / CSV,
-  restore from file or pasted text.
+- **Data** — load 12 sample leads, clear all, export JSON / CSV, restore from file or
+  pasted text.
+- **Admin** — mock admin panel behind a PIN (default `0000`, changeable there). Owners
+  table: add, rename, remove (leads are reassigned), role (Rep / Partner / Admin), active
+  toggle, default owner for new leads. The PIN is a demo gate, not security.
 
 ## Stages
 
