@@ -159,7 +159,7 @@
 <script>
 'use strict';
 // BUILD is checked against the live file after each deploy.
-const BUILD = '2026-09-04-3';
+const BUILD = '2026-09-04-4';
 
 // ---- Reference data ----------------------------------------------------------
 const STAGES = [
@@ -469,7 +469,7 @@ const TRAINING = [
   ['Tony Marchetti', 56, 'Nashville, Tennessee', 'United States', 'United States', 'Owner of a home-services company', ['Spain'], 'couple', '', 'exploring', 'Asking about the “Golden Visa” he read about'],
   ['Aisha Campbell', 38, 'Minneapolis, Minnesota', 'United States', 'United States', 'ICU registered nurse', ['Canada'], 'family', '', '3-6', 'In-demand nurse; wants a fast, stable move'],
 ];
-const SAMPLE_STAGES = ['new', 'booked', 'held', 'new', 'agreed', 'held', 'booked', 'handoff', 'new', 'scheduled', 'held', 'paid', 'new', 'consult', 'booked', 'service', 'closed', 'held', 'closed', 'new'];
+const SAMPLE_STAGES = ['new', 'booked', 'held', 'new', 'agreed', 'held', 'booked', 'handoff', 'new', 'scheduled', 'held', 'paid', 'new', 'consult', 'booked', 'service', 'held', 'new'];  // all open
 function sampleLeads() {
   const d = n => { const t = new Date(); t.setDate(t.getDate() + n); return t.toISOString().slice(0, 10); };
   const ago = n => { const t = new Date(); t.setDate(t.getDate() - n); return t.toISOString(); };
@@ -481,12 +481,11 @@ function sampleLeads() {
       name, age, resCity, resCountry, nationality, occupation, destinations: destinations.slice(), party, pets, timeline, why,
       email: name.toLowerCase().replace(/[“”"]/g, '').replace(/[^a-z ]/g, '').trim().replace(/ +/g, '.') + '@example.com',
       consent: true, owner: OWNERS_DEFAULT[i % OWNERS_DEFAULT.length], stage,
-      outcome: stage === 'closed' ? ['won', 'lost', 'notyet'][i % 3] : '',
-      followUp: stage === 'closed' ? '' : d((i * 5) % 9 - 3),
+      followUp: d((i * 5) % 9 - 3),
     });
     l.created = ago(daysAgo); l.updated = ago(Math.max(0, daysAgo - 2));
     l.log = [{ t: l.created, text: 'Lead created', kind: 'stage' }];
-    if (stage !== 'new') l.log.unshift({ t: l.updated, text: 'New lead → ' + STAGE_LABEL[stage] + (stage === 'closed' ? ' (' + OUTCOMES[l.outcome] + ')' : ''), kind: 'stage' });
+    if (stage !== 'new') l.log.unshift({ t: l.updated, text: 'New lead → ' + STAGE_LABEL[stage], kind: 'stage' });
     return l;
   });
 }
