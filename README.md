@@ -32,8 +32,8 @@ not yet).
 
 ## Notes
 
-- Sample leads are the 58 fictional practice callers from the Call Training sets — basics only
-  (name, age, home, destination, party, timeline, why). No financials.
+- Sample leads are the 58 fictional practice callers from the Call Training sets — name only,
+  with generated example.com emails and 555 phone numbers, all at Free call booked.
 - Currency conversion in the hints uses rough fixed rates; it exists only to compare against
   thresholds.
 - Storage keys are `crm_leads` and `crm_settings`.
