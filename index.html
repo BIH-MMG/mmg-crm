@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<!-- MMG CRM — dummy lead-intake CRM. One file, no backend, no dependencies.
+     All data lives in this browser's localStorage under crm_* keys. Keep the prefix:
+     GitHub Pages project pages on one account share a single origin, so any other
+     app published under BIH-MMG.github.io would see these keys. -->
+<title>MMG CRM</title>
+<style>
+  :root {
+    --brand: #1F4E79;
+    --brand-light: #2F6FA8;
+    --bg: #F5F7FA;
+    --card: #FFFFFF;
+    --text: #1E2530;
+    --muted: #6B7380;
+    --border: #D8DEE8;
+    --row-alt: #F3F6F8;
+    --head: #EAF2F8;
+    --ok-bg: #E3F3E6; --ok-text: #1E5B2E;
+    --warn-bg: #FFF4E3; --warn-text: #8A5A16;
+    --bad-bg: #FBE5E5; --bad-text: #8F2A2A;
+    --danger: #B23B3B;
+    --shadow: 0 1px 3px rgba(0,0,0,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --brand: #3D7FBF;
+      --brand-light: #5B98D3;
+      --bg: #131820;
+      --card: #1B222C;
+      --text: #E6EAF0;
+      --muted: #97A0AE;
+      --border: #313B48;
+      --row-alt: #1F2833;
+      --head: #22303F;
+      --ok-bg: #1B3A24; --ok-text: #9BDCA8;
+      --warn-bg: #3F2E12; --warn-text: #F0C27A;
+      --bad-bg: #40191C; --bad-text: #F2A0A0;
+      --danger: #E06C6C;
+      --shadow: 0 1px 3px rgba(0,0,0,.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  a { color: var(--brand); }
+  header { background: var(--brand); color: #fff; display: flex; align-items: center; gap: 4px;
+    padding: 0 16px; height: 48px; position: sticky; top: 0; z-index: 5; }
+  header .brand { font-weight: 700; font-size: 16px; margin-right: 20px; letter-spacing: .3px; }
+  header nav { display: flex; gap: 2px; flex: 1; overflow-x: auto; }
+  header nav button { background: none; border: 0; color: rgba(255,255,255,.8); padding: 0 12px; height: 48px;
+    font: inherit; font-weight: 600; cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; }
+  header nav button.on { color: #fff; border-bottom-color: #fff; }
+  header .newbtn { background: #fff; color: var(--brand); border: 0; border-radius: 6px; padding: 7px 14px;
+    font: inherit; font-weight: 700; cursor: pointer; }
+  main { max-width: 1240px; margin: 0 auto; padding: 18px 16px 60px; }
+  h2 { font-size: 18px; margin: 0 0 12px; color: var(--brand); }
+  h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 22px 0 8px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; box-shadow: var(--shadow); }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .toolbar input[type=search] { flex: 1; min-width: 180px; }
+  input, select, textarea { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 9px; width: 100%; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand-light); outline-offset: 0; border-color: transparent; }
+  textarea { min-height: 70px; resize: vertical; }
+  .toolbar select, .toolbar input[type=search] { width: auto; }
+  button.btn { font: inherit; font-weight: 600; background: var(--brand); color: #fff; border: 0; border-radius: 6px;
+    padding: 8px 14px; cursor: pointer; }
+  button.btn.sec { background: var(--card); color: var(--brand); border: 1px solid var(--brand); }
+  button.btn.danger { background: var(--danger); }
+  button.btn.small { padding: 4px 9px; font-size: 12px; }
+  button.btn:disabled { opacity: .5; cursor: default; }
+  .tablewrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { background: var(--head); font-weight: 600; color: var(--brand); cursor: pointer; user-select: none; position: sticky; top: 48px; }
+  th .dir { color: var(--muted); font-size: 11px; margin-left: 3px; }
+  tbody tr { cursor: pointer; }
+  tbody tr:nth-child(even) { background: var(--row-alt); }
+  tbody tr:hover { background: var(--head); }
+  td.name { font-weight: 600; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; background: var(--head); color: var(--brand); }
+  .pill.ok { background: var(--ok-bg); color: var(--ok-text); }
+  .pill.warn { background: var(--warn-bg); color: var(--warn-text); }
+  .pill.bad { background: var(--bad-bg); color: var(--bad-text); }
+  .pill.grey { background: var(--row-alt); color: var(--muted); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 14px; }
+  .grid label, .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; font-weight: 600; }
+  .field { margin-bottom: 10px; }
+  .span2 { grid-column: span 2; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .row > * { flex: 1; }
+  .checks { display: flex; flex-wrap: wrap; gap: 6px 14px; padding-top: 4px; }
+  .checks label { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--text); font-weight: 500; margin: 0; }
+  .checks input { width: auto; }
+  .two { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 860px) { .two { grid-template-columns: 1fr; } .span2 { grid-column: span 1; } }
+  .hint { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); align-items: flex-start; }
+  .hint:last-child { border-bottom: 0; }
+  .hint .pill { flex-shrink: 0; min-width: 62px; text-align: center; }
+  .hint b { display: block; }
+  .hint span { color: var(--muted); font-size: 12px; }
+  .log { list-style: none; padding: 0; margin: 0; }
+  .log li { padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .log li time { color: var(--muted); font-size: 11px; display: block; }
+  .msg { color: var(--muted); font-size: 13px; margin-top: 6px; min-height: 18px; }
+  .msg.err { color: var(--danger); }
+  .empty { color: var(--muted); padding: 24px; text-align: center; }
+  /* kanban */
+  .board { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 12px; align-items: flex-start; }
+  .col { flex: 0 0 210px; background: var(--row-alt); border: 1px solid var(--border); border-radius: 8px; padding: 8px; min-height: 120px; }
+  .col.over { outline: 2px dashed var(--brand-light); }
+  .col h4 { margin: 0 0 8px; font-size: 12px; color: var(--brand); display: flex; justify-content: space-between; }
+  .kcard { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin-bottom: 6px; cursor: grab; box-shadow: var(--shadow); }
+  .kcard b { display: block; font-size: 13px; }
+  .kcard small { color: var(--muted); display: block; }
+  .kcard .mv { display: flex; justify-content: space-between; margin-top: 6px; }
+  .kcard .mv button { background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--brand); cursor: pointer; font: inherit; padding: 1px 8px; }
+  .kcard.late { border-left: 3px solid var(--danger); }
+  /* dashboard */
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .stat { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; box-shadow: var(--shadow); }
+  .stat .n { font-size: 26px; font-weight: 700; color: var(--brand); line-height: 1.1; }
+  .stat .l { font-size: 12px; color: var(--muted); }
+  .bars { display: grid; grid-template-columns: 150px 1fr 40px; gap: 6px 10px; align-items: center; font-size: 13px; }
+  .bars .bar { background: var(--row-alt); border-radius: 4px; height: 14px; overflow: hidden; }
+  .bars .bar i { display: block; height: 100%; background: var(--brand-light); }
+  .bars .v { text-align: right; color: var(--muted); }
+  .cols3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+  .late-text { color: var(--danger); font-weight: 600; }
+  footer { color: var(--muted); font-size: 11px; text-align: center; padding: 20px 0 0; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">MMG CRM</div>
+  <nav id="tabs">
+    <button data-tab="leads" class="on">Leads</button>
+    <button data-tab="pipeline">Pipeline</button>
+    <button data-tab="dashboard">Dashboard</button>
+    <button data-tab="data">Data</button>
+  </nav>
+  <button class="newbtn" id="newLead">+ New lead</button>
+</header>
+<main id="main"></main>
+
+<script>
+'use strict';
+// BUILD is checked against the live file after each deploy.
+const BUILD = '2026-09-04-1';
+
+// ---- Reference data ----------------------------------------------------------
+const STAGES = [
+  ['new',       'New lead'],
+  ['booked',    'Free call booked'],
+  ['held',      'Free call held'],
+  ['agreed',    'Agreed to paid consult'],
+  ['handoff',   'Handed to partner'],
+  ['scheduled', 'Scheduling email sent'],
+  ['paid',      'Paid'],
+  ['consult',   'Paid consult held'],
+  ['service',   'Service engagement'],
+  ['closed',    'Closed'],
+];
+const STAGE_LABEL = Object.fromEntries(STAGES);
+const STAGE_INDEX = Object.fromEntries(STAGES.map((s, i) => [s[0], i]));
+const OUTCOMES = { won: 'Won', lost: 'Lost', notyet: 'Not yet' };
+const DESTS = ['Canada', 'Spain', 'Thailand', 'Malta', 'Other'];
+const SOURCES = ['Website form', 'Referral', 'Social media', 'Webinar', 'Partner', 'Walk-in / email', 'Other'];
+const LANGS = ['English', 'Spanish', 'French', 'Japanese', 'Chinese', 'Other'];
+const PARTY = { solo: 'Solo', couple: 'Couple', family: 'Family' };
+const EMP = { employed: 'Employed (on-site)', remote: 'Employed (remote)', owner: 'Business owner', freelance: 'Freelance / contractor', retired: 'Retired', student: 'Student', other: 'Other' };
+const INCOME_TYPE = { salary: 'Salary', remote: 'Remote work', business: 'Business income', passive: 'Passive / investments', pension: 'Pension', none: 'None' };
+const TIMELINE = { now: 'Immediate', '3-6': '3–6 months', '6-12': '6–12 months', '12+': '12+ months', exploring: 'Just exploring' };
+const INVEST = { none: 'None', rent: 'Would rent', buy: 'Would buy property' };
+const FIRM = { none: 'No preference', large: 'Large full-service firm', small: 'Smaller cost-effective firm' };
+const CURRENCIES = ['USD', 'EUR', 'CAD', 'GBP', 'THB', 'JPY'];
+// Rough rates to USD, for screening hints only.
+const TO_USD = { USD: 1, EUR: 1.08, CAD: 0.73, GBP: 1.27, THB: 0.028, JPY: 0.0067 };
+const OWNERS_DEFAULT = ['Brian H.', 'Ana R.', 'Tom K.'];
+
+// ---- Helpers -----------------------------------------------------------------
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function num(v) { const n = parseFloat(String(v).replace(/[, ]/g, '')); return isNaN(n) ? null : n; }
+function fmtDate(iso) { return iso ? iso.slice(0, 10) : ''; }
+function fmtMoney(n, cur) { return n == null ? '' : (cur || '') + ' ' + Math.round(n).toLocaleString('en-US'); }
+function opts(map, sel, blank) {
+  let h = blank ? '<option value="">' + esc(blank) + '</option>' : '';
+  const entries = Array.isArray(map) ? map.map(v => [v, v]) : Object.entries(map);
+  for (const [v, l] of entries) h += '<option value="' + esc(v) + '"' + (v === sel ? ' selected' : '') + '>' + esc(l) + '</option>';
+  return h;
+}
+function isLate(lead) { return lead.stage !== 'closed' && !!lead.followUp && lead.followUp < todayStr(); }
+function yearlyUSD(lead) {
+  const n = num(lead.income); if (n == null) return null;
+  const per = lead.incomePer === 'month' ? 12 : 1;
+  return n * per * (TO_USD[lead.incomeCur] || 1);
+}
+function usd(lead, field) { const n = num(lead[field]); return n == null ? null : n * (TO_USD[lead.incomeCur] || 1); }
+const USD_PER_EUR = TO_USD.EUR;
+
+// ---- State & storage ---------------------------------------------------------
+let leads = [];
+let settings = { owners: OWNERS_DEFAULT.slice() };
+let view = { tab: 'leads', leadId: null, q: '', stage: '', dest: '', owner: '', sort: 'updated', dir: -1 };
+
+function loadAll() {
+  try {
+    const l = JSON.parse(localStorage.getItem('crm_leads') || 'null');
+    if (Array.isArray(l)) leads = l.map(normalise);
+  } catch (e) { console.error(e); leads = []; }
+  try {
+    const s = JSON.parse(localStorage.getItem('crm_settings') || 'null');
+    if (s && Array.isArray(s.owners) && s.owners.length) settings = s;
+  } catch (e) { console.error(e); }
+}
+function saveLeads() { try { localStorage.setItem('crm_leads', JSON.stringify(leads)); return true; } catch (e) { console.error(e); return false; } }
+function saveSettings() { try { localStorage.setItem('crm_settings', JSON.stringify(settings)); return true; } catch (e) { console.error(e); return false; } }
+
+function blankLead() {
+  const now = new Date().toISOString();
+  return {
+    id: uid(), created: now, updated: now,
+    name: '', email: '', phone: '', lang: 'English', source: '', consent: false,
+    nationality: '', resCountry: '', resCity: '', age: '',
+    party: 'solo', dependants: '', pets: '',
+    occupation: '', empMode: '', years: '', education: '',
+    income: '', incomeCur: 'USD', incomePer: 'year', incomeType: '', liquid: '', assets: '',
+    destinations: [], why: '', timeline: '', visa: '', invest: 'none', investBudget: '', firm: 'none',
+    owner: '', stage: 'new', followUp: '', outcome: '', notes: '',
+    log: [],
+  };
+}
+function normalise(raw) {
+  const l = Object.assign(blankLead(), raw || {});
+  if (!Array.isArray(l.destinations)) l.destinations = [];
+  if (!Array.isArray(l.log)) l.log = [];
+  if (!STAGE_LABEL[l.stage]) l.stage = 'new';
+  return l;
+}
+function findLead(id) { return leads.find(l => l.id === id) || null; }
+function addLog(lead, text, kind) {
+  lead.log.unshift({ t: new Date().toISOString(), text: text, kind: kind || 'note' });
+}
+function setStage(lead, stage, outcome) {
+  if (!STAGE_LABEL[stage]) return false;
+  if (lead.stage === stage && (stage !== 'closed' || lead.outcome === outcome)) return true;
+  const from = lead.stage;
+  lead.stage = stage;
+  if (stage === 'closed') lead.outcome = outcome || lead.outcome || 'notyet'; else lead.outcome = '';
+  lead.updated = new Date().toISOString();
+  addLog(lead, STAGE_LABEL[from] + ' → ' + STAGE_LABEL[stage] + (stage === 'closed' ? ' (' + OUTCOMES[lead.outcome] + ')' : ''), 'stage');
+  return true;
+}
+
+// ---- Screening hints ---------------------------------------------------------
+// Rule-of-thumb fit against the Ready Reckoner thresholds. Never a processing
+// time, never a Canadian settlement-funds figure, never a TEER code or CRS score.
+function screeningHints(lead) {
+  const out = [];
+  const yr = yearlyUSD(lead);
+  const mo = yr == null ? null : yr / 12;
+  const liquid = usd(lead, 'liquid'), assets = usd(lead, 'assets');
+  const age = num(lead.age);
+  const deps = (String(lead.dependants).match(/\d+/g) || []).length + (lead.party === 'couple' || lead.party === 'family' ? 1 : 0);
+  const remoteWork = lead.empMode === 'remote' || lead.empMode === 'freelance' || lead.incomeType === 'remote';
+  const passive = lead.incomeType === 'passive' || lead.incomeType === 'pension' || lead.empMode === 'retired';
+  const visa = String(lead.visa).toLowerCase();
+  const has = d => lead.destinations.includes(d);
+  const H = (prog, verdict, note) => out.push({ prog, verdict, note });
+
+  if (has('Spain')) {
+    if (/golden/.test(visa)) H('Spain Golden Visa', 'no', 'Discontinued for new applicants. Pivot to Non-Lucrative, Portugal Golden Visa (€500k funds, 14 days per 2 years) or Malta MPRP.');
+    if (lead.empMode === 'retired') H('Spain Digital Nomad', 'unlikely', 'Needs active remote work for a non-Spanish employer or clients.');
+    else if (mo == null) H('Spain Digital Nomad', 'check', 'Needs remote income ≥ €2,849/month (200% SMI, rises with family), employer >1 year old, >3 months with them, ≤20% from Spanish clients.');
+    else if (remoteWork && mo >= 2849 * USD_PER_EUR) H('Spain Digital Nomad', 'fit', 'Remote income clears €2,849/month. Confirm employer age >1 year, >3 months with them, ≤20% Spanish-sourced.');
+    else if (remoteWork) H('Spain Digital Nomad', 'unlikely', 'Remote income below ~€2,849/month.');
+    else H('Spain Digital Nomad', 'check', 'Only if the work can be done remotely for a non-Spanish company or clients.');
+    const nlvNeed = (28800 + 7200 * deps) * USD_PER_EUR;
+    if (yr != null && passive && yr >= nlvNeed) H('Spain Non-Lucrative', 'fit', 'Passive income clears 400% IPREM (~€28,800 + €7,200 per family member). No work of any kind, including remote.');
+    else if (yr != null && passive) H('Spain Non-Lucrative', 'unlikely', 'Passive income below ~€' + Math.round(nlvNeed / USD_PER_EUR).toLocaleString('en-US') + '/year for this family size. Savings can count — consultant to confirm.');
+    else if (remoteWork) H('Spain Non-Lucrative', 'no', 'NLV forbids any work, including remote. Digital Nomad is the route.');
+    else H('Spain Non-Lucrative', 'check', 'Needs ~€28,800/year passive or savings, +€7,200 per family member. No work allowed.');
+  }
+  if (has('Thailand')) {
+    if (age != null && age >= 50 && yr != null && yr >= 80000 && passive) H('Thailand LTR — Wealthy Pensioner', 'fit', 'Age 50+ with ≥ $80k/year pension or passive income.');
+    else if (age != null && age >= 50) H('Thailand LTR — Wealthy Pensioner', 'check', 'Age qualifies; needs ≥ $80k/year pension or passive income (lower with $250k invested — consultant).');
+    if (remoteWork && yr != null && yr >= 80000 && (num(lead.years) || 0) >= 5) H('Thailand LTR — Work-from-Thailand', 'fit', 'Remote for an overseas employer, ≥ $80k/year, 5+ years experience. Employer test applies — consultant.');
+    else if (remoteWork) H('Thailand LTR — Work-from-Thailand', 'check', 'Needs ≥ $80k/year (lower with a master’s), 5 years experience, qualifying overseas employer.');
+    if (assets != null && assets >= 1000000 && yr != null && yr >= 80000) H('Thailand LTR — Wealthy Global Citizen', 'check', 'Assets and income clear; also needs $500k invested in Thailand.');
+    H('Thailand Privilege', 'fit', 'No eligibility test — membership fee from THB 650,000 (5 years). No employment permitted.');
+    if (/permanent|pr\b/.test(visa)) H('Thailand PR', 'no', 'Not a day-one route: 3+ years of annual extensions, Thai tax history, Thai language interview, nationality quota.');
+  }
+  if (has('Malta')) {
+    if (assets != null && liquid != null && assets >= 500000 * USD_PER_EUR && liquid >= 150000 * USD_PER_EUR) H('Malta MPRP', 'fit', '€500k total assets with €150k liquid clears. Budget ~€99k in fees plus property (buy ≥ €375k or rent ≥ €14k/year). No minimum stay.');
+    else if (assets != null || liquid != null) H('Malta MPRP', 'unlikely', 'Needs €500k total assets of which €150k liquid (alternative €650k/€75k route — consultant).');
+    else H('Malta MPRP', 'check', 'Needs €500k total assets, €150k liquid, ~€99k fees and a qualifying property.');
+    if (passive || yr != null) H('Malta GRP', 'check', 'Tax-status route: stable regular income, 15% on remitted income (min €15k tax), property, not >183 days elsewhere. Renewed annually.');
+  }
+  if (has('Canada')) {
+    if (lead.empMode === 'retired') H('Canada Express Entry', 'unlikely', 'Points-based on skilled work, language and education; retirees rarely score.');
+    else if (lead.occupation) H('Canada Express Entry', 'check', 'Skilled work (TEER 0–3), approved language test, ECA for foreign degrees. Consultant assigns TEER and CRS.');
+    else H('Canada Express Entry', 'check', 'Need occupation, education and language details first.');
+    if (lead.empMode !== 'retired') H('Canada PNP', 'check', 'Usually needs a job offer in the province. Enhanced nominations add 600 CRS points.');
+    if (/famil|sponsor|sister|brother|parent|spouse/.test((lead.why + ' ' + visa).toLowerCase())) H('Canada Family Sponsorship', 'check', 'Sponsor must be a citizen or PR aged 18+ and sign a financial undertaking.');
+  }
+  return out;
+}
+
+// ---- Sample data -------------------------------------------------------------
+function sampleLeads() {
+  const d = n => { const t = new Date(); t.setDate(t.getDate() + n); return t.toISOString().slice(0, 10); };
+  const ago = n => { const t = new Date(); t.setDate(t.getDate() - n); return t.toISOString(); };
+  const mk = (o, daysAgo) => {
+    const l = Object.assign(blankLead(), o);
+    l.created = ago(daysAgo); l.updated = ago(Math.max(0, daysAgo - 2));
+    l.log = [{ t: l.created, text: 'Lead created', kind: 'stage' }];
+    if (l.stage !== 'new') l.log.unshift({ t: l.updated, text: 'New lead → ' + STAGE_LABEL[l.stage], kind: 'stage' });
+    return l;
+  };
+  return [
+    mk({ name: 'Daniel Kwon', email: 'daniel.kwon@example.com', phone: '+1 512 555 0142', source: 'Website form', consent: true,
+      nationality: 'United States', resCountry: 'United States', resCity: 'Austin, TX', age: 31, party: 'solo',
+      occupation: 'Software engineer', empMode: 'remote', years: 8, education: "Bachelor's", income: 145000, incomeCur: 'USD', incomePer: 'year', incomeType: 'remote', liquid: 90000, assets: 260000,
+      destinations: ['Spain'], why: 'Remote work from Europe, lifestyle', timeline: '3-6', visa: 'Digital Nomad Visa', invest: 'rent', firm: 'small',
+      owner: 'Brian H.', stage: 'held', followUp: d(-1), notes: 'Employer is 6 years old, no Spanish clients.' }, 5),
+    mk({ name: 'Margaret Ellis', email: 'm.ellis@example.com', phone: '+1 415 555 0177', source: 'Referral', consent: true,
+      nationality: 'United States', resCountry: 'United States', resCity: 'San Francisco, CA', age: 63, party: 'couple',
+      occupation: 'Retired teacher', empMode: 'retired', education: "Master's", income: 5800, incomeCur: 'USD', incomePer: 'month', incomeType: 'pension', liquid: 420000, assets: 1300000,
+      destinations: ['Spain', 'Malta'], why: 'Retirement, warmer climate', timeline: '6-12', visa: 'Non-Lucrative Visa', invest: 'buy', investBudget: 350000, firm: 'large',
+      owner: 'Ana R.', stage: 'agreed', followUp: d(1), notes: 'Husband 65, also retired.' }, 9),
+    mk({ name: 'Priya Natarajan', email: 'priya.n@example.com', phone: '+1 647 555 0119', source: 'Social media', consent: true,
+      nationality: 'India', resCountry: 'United States', resCity: 'Seattle, WA', age: 34, party: 'family', dependants: '6, 3',
+      occupation: 'Registered nurse', empMode: 'employed', years: 10, education: "Bachelor's", income: 98000, incomeCur: 'USD', incomePer: 'year', incomeType: 'salary', liquid: 45000, assets: 120000,
+      destinations: ['Canada'], why: 'Healthcare career, family future', timeline: '6-12', visa: 'Express Entry', invest: 'rent', firm: 'none',
+      owner: 'Tom K.', stage: 'scheduled', followUp: d(2) }, 12),
+    mk({ name: 'Robert Hale', email: 'rhale@example.com', phone: '+1 303 555 0163', source: 'Webinar', consent: true,
+      nationality: 'United States', resCountry: 'United States', resCity: 'Denver, CO', age: 54, party: 'couple',
+      occupation: 'Sold a logistics business', empMode: 'retired', education: "Bachelor's", income: 120000, incomeCur: 'USD', incomePer: 'year', incomeType: 'passive', liquid: 900000, assets: 2400000,
+      destinations: ['Thailand'], why: 'Early retirement, low cost of living', timeline: 'now', visa: 'Thailand Elite', invest: 'buy', investBudget: 250000, firm: 'large',
+      owner: 'Brian H.', stage: 'paid', followUp: d(4) }, 20),
+    mk({ name: 'Lucía Fernández', email: 'lucia.f@example.com', phone: '+34 600 555 021', lang: 'Spanish', source: 'Partner', consent: true,
+      nationality: 'Mexico', resCountry: 'Mexico', resCity: 'Guadalajara', age: 29, party: 'solo',
+      occupation: 'UX designer', empMode: 'freelance', years: 5, education: "Bachelor's", income: 2200, incomeCur: 'USD', incomePer: 'month', incomeType: 'remote', liquid: 12000, assets: 20000,
+      destinations: ['Spain'], why: 'EU base, Spanish citizenship in 2 years', timeline: '3-6', visa: 'Digital Nomad Visa', invest: 'rent', firm: 'small',
+      owner: 'Ana R.', stage: 'booked', followUp: d(0) }, 2),
+    mk({ name: 'James & Helen Whitford', email: 'whitfords@example.com', phone: '+44 20 7946 0958', source: 'Referral', consent: true,
+      nationality: 'United Kingdom', resCountry: 'United Kingdom', resCity: 'Bristol', age: 58, party: 'couple',
+      occupation: 'Company director', empMode: 'owner', years: 30, education: "Bachelor's", income: 190000, incomeCur: 'GBP', incomePer: 'year', incomeType: 'business', liquid: 400000, assets: 1900000,
+      destinations: ['Malta'], why: 'Tax residence, EU access', timeline: '6-12', visa: 'MPRP', invest: 'buy', investBudget: 450000, firm: 'large',
+      owner: 'Tom K.', stage: 'service', followUp: d(10), notes: 'Accredited Agent engaged via partner.' }, 40),
+    mk({ name: 'Trent Whitlow', email: 'trent.w@example.com', phone: '+1 602 555 0134', source: 'Website form', consent: false,
+      nationality: 'United States', resCountry: 'United States', resCity: 'Phoenix, AZ', age: 41, party: 'solo',
+      occupation: 'Sales manager', empMode: 'employed', years: 15, education: 'High school', income: 85000, incomeCur: 'USD', incomePer: 'year', incomeType: 'salary', liquid: 15000, assets: 40000,
+      destinations: ['Thailand', 'Malta'], why: 'Wants out of the US, asked for a discount', timeline: 'exploring', visa: 'Whatever is cheapest', invest: 'none', firm: 'small',
+      owner: 'Brian H.', stage: 'closed', outcome: 'notyet', followUp: '', notes: 'Not ready; revisit in Q1.' }, 15),
+    mk({ name: 'Mei Lin Chao', email: 'meilin@example.com', phone: '+1 213 555 0188', lang: 'Chinese', source: 'Social media', consent: true,
+      nationality: 'Taiwan', resCountry: 'United States', resCity: 'Los Angeles, CA', age: 38, party: 'family', dependants: '9', pets: 'Dog',
+      occupation: 'E-commerce business owner', empMode: 'owner', years: 12, education: "Master's", income: 210000, incomeCur: 'USD', incomePer: 'year', incomeType: 'business', liquid: 300000, assets: 1100000,
+      destinations: ['Canada', 'Thailand'], why: 'Children’s education, business expansion', timeline: '6-12', visa: 'Not sure', invest: 'buy', investBudget: 600000, firm: 'large',
+      owner: 'Ana R.', stage: 'new', followUp: d(1) }, 1),
+    mk({ name: 'Olivier Marchand', email: 'o.marchand@example.com', phone: '+1 514 555 0102', lang: 'French', source: 'Webinar', consent: true,
+      nationality: 'France', resCountry: 'Canada', resCity: 'Montreal, QC', age: 45, party: 'couple',
+      occupation: 'Architect', empMode: 'remote', years: 20, education: "Master's", income: 7000, incomeCur: 'CAD', incomePer: 'month', incomeType: 'remote', liquid: 80000, assets: 350000,
+      destinations: ['Spain'], why: 'Return to Europe, keep Canadian clients', timeline: '12+', visa: 'Digital Nomad Visa', invest: 'rent', firm: 'none',
+      owner: 'Tom K.', stage: 'held', followUp: d(-3) }, 7),
+    mk({ name: 'Sandra Okafor', email: 'sandra.o@example.com', phone: '+1 404 555 0155', source: 'Website form', consent: true,
+      nationality: 'United States', resCountry: 'United States', resCity: 'Atlanta, GA', age: 36, party: 'family', dependants: '4, 2',
+      occupation: 'Physician assistant', empMode: 'employed', years: 9, education: "Master's", income: 130000, incomeCur: 'USD', incomePer: 'year', incomeType: 'salary', liquid: 60000, assets: 200000,
+      destinations: ['Canada'], why: 'Sister in Ontario, safer schools', timeline: '3-6', visa: 'Family sponsorship?', invest: 'rent', firm: 'small',
+      owner: 'Brian H.', stage: 'consult', followUp: d(3) }, 25),
+    mk({ name: 'Kenji Arai', email: 'k.arai@example.com', phone: '+1 808 555 0121', lang: 'Japanese', source: 'Referral', consent: true,
+      nationality: 'Japan', resCountry: 'United States', resCity: 'Honolulu, HI', age: 52, party: 'solo',
+      occupation: 'Restaurant owner', empMode: 'owner', years: 25, education: "Bachelor's", income: 95000, incomeCur: 'USD', incomePer: 'year', incomeType: 'business', liquid: 150000, assets: 700000,
+      destinations: ['Thailand'], why: 'Second base in Asia, semi-retire', timeline: '6-12', visa: 'LTR', invest: 'rent', firm: 'small',
+      owner: 'Ana R.', stage: 'handoff', followUp: d(-2) }, 11),
+    mk({ name: 'Grace Lindqvist', email: 'grace.l@example.com', phone: '+1 612 555 0199', source: 'Other', consent: true,
+      nationality: 'United States', resCountry: 'United States', resCity: 'Minneapolis, MN', age: 27, party: 'solo',
+      occupation: 'Graduate student', empMode: 'student', years: 1, education: "Master's (in progress)", income: 0, incomeCur: 'USD', incomePer: 'year', incomeType: 'none', liquid: 8000, assets: 8000,
+      destinations: ['Spain', 'Other'], why: 'Study, then work in Europe', timeline: '12+', visa: 'Student visa', invest: 'none', firm: 'none',
+      owner: 'Tom K.', stage: 'closed', outcome: 'lost', followUp: '', notes: 'Outside scope for now; referred to university.' }, 30),
+  ];
+}
+
+// ---- Rendering ---------------------------------------------------------------
+const el = id => document.getElementById(id);
+function main() { return el('main'); }
+
+function showTab(tab) {
+  view.tab = tab; view.leadId = null;
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  render();
+}
+function render() {
+  if (view.leadId) return renderLead(view.leadId);
+  ({ leads: renderLeads, pipeline: renderPipeline, dashboard: renderDashboard, data: renderData }[view.tab] || renderLeads)();
+}
+
+// -- Leads table
+function filteredLeads() {
+  const q = view.q.trim().toLowerCase();
+  let rows = leads.filter(l =>
+    (!view.stage || l.stage === view.stage) &&
+    (!view.dest || l.destinations.includes(view.dest)) &&
+    (!view.owner || l.owner === view.owner) &&
+    (!q || [l.name, l.email, l.phone, l.nationality, l.resCity, l.occupation, l.why, l.visa, l.notes].join(' ').toLowerCase().includes(q)));
+  const k = view.sort, dir = view.dir;
+  rows.sort((a, b) => {
+    let x = a[k], y = b[k];
+    if (k === 'stage') { x = STAGE_INDEX[a.stage]; y = STAGE_INDEX[b.stage]; }
+    if (k === 'destinations') { x = a.destinations.join(); y = b.destinations.join(); }
+    if (k === 'income') { x = yearlyUSD(a) || 0; y = yearlyUSD(b) || 0; }
+    if (x == null || x === '') return 1; if (y == null || y === '') return -1;
+    return (x < y ? -1 : x > y ? 1 : 0) * dir;
+  });
+  return rows;
+}
+function renderLeads() {
+  const cols = [['name', 'Name'], ['stage', 'Stage'], ['destinations', 'Destination'], ['nationality', 'Nationality'], ['resCity', 'Residence'],
+    ['timeline', 'Timeline'], ['income', 'Income (yr, USD≈)'], ['owner', 'Owner'], ['followUp', 'Follow-up'], ['updated', 'Updated']];
+  const rows = filteredLeads();
+  let h = '<div class="toolbar">' +
+    '<input type="search" id="q" placeholder="Search" value="' + esc(view.q) + '">' +
+    '<select id="fStage">' + opts(STAGE_LABEL, view.stage, 'All stages') + '</select>' +
+    '<select id="fDest">' + opts(DESTS, view.dest, 'All destinations') + '</select>' +
+    '<select id="fOwner">' + opts(settings.owners, view.owner, 'All owners') + '</select>' +
+    '<span class="msg">' + rows.length + ' of ' + leads.length + '</span></div>';
+  if (!leads.length) {
+    h += '<div class="card empty">No leads yet. Add one, or load the sample data from the Data tab.</div>';
+  } else {
+    h += '<div class="card tablewrap"><table><thead><tr>' + cols.map(c =>
+      '<th data-k="' + c[0] + '">' + esc(c[1]) + (view.sort === c[0] ? '<span class="dir">' + (view.dir > 0 ? '▲' : '▼') + '</span>' : '') + '</th>').join('') +
+      '</tr></thead><tbody>';
+    for (const l of rows) {
+      const yr = yearlyUSD(l);
+      h += '<tr data-id="' + l.id + '">' +
+        '<td class="name">' + esc(l.name || '(unnamed)') + '</td>' +
+        '<td>' + stagePill(l) + '</td>' +
+        '<td>' + esc(l.destinations.join(', ')) + '</td>' +
+        '<td>' + esc(l.nationality) + '</td>' +
+        '<td>' + esc([l.resCity, l.resCountry].filter(Boolean).join(', ')) + '</td>' +
+        '<td>' + esc(TIMELINE[l.timeline] || '') + '</td>' +
+        '<td>' + (yr == null ? '' : '$' + Math.round(yr).toLocaleString('en-US')) + '</td>' +
+        '<td>' + esc(l.owner) + '</td>' +
+        '<td' + (isLate(l) ? ' class="late-text"' : '') + '>' + esc(l.followUp) + '</td>' +
+        '<td>' + fmtDate(l.updated) + '</td></tr>';
+    }
+    h += '</tbody></table>' + (rows.length ? '' : '<div class="empty">Nothing matches.</div>') + '</div>';
+  }
+  main().innerHTML = h;
+  el('q').oninput = e => { view.q = e.target.value; renderLeads(); const q = el('q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); };
+  el('fStage').onchange = e => { view.stage = e.target.value; renderLeads(); };
+  el('fDest').onchange = e => { view.dest = e.target.value; renderLeads(); };
+  el('fOwner').onchange = e => { view.owner = e.target.value; renderLeads(); };
+  document.querySelectorAll('th[data-k]').forEach(th => th.onclick = () => {
+    const k = th.dataset.k;
+    if (view.sort === k) view.dir = -view.dir; else { view.sort = k; view.dir = k === 'updated' || k === 'income' ? -1 : 1; }
+    renderLeads();
+  });
+  document.querySelectorAll('tbody tr[data-id]').forEach(tr => tr.onclick = () => openLead(tr.dataset.id));
+}
+function stagePill(l) {
+  if (l.stage === 'closed') return '<span class="pill ' + (l.outcome === 'won' ? 'ok' : l.outcome === 'lost' ? 'bad' : 'grey') + '">Closed · ' + esc(OUTCOMES[l.outcome] || '') + '</span>';
+  return '<span class="pill">' + esc(STAGE_LABEL[l.stage]) + '</span>';
+}
+
+// -- Lead form
+function openLead(id) { view.leadId = id; render(); window.scrollTo(0, 0); }
+function newLead() {
+  const l = blankLead();
+  l.owner = settings.owners[0] || '';
+  l.followUp = todayStr();
+  addLog(l, 'Lead created', 'stage');
+  leads.unshift(l);
+  if (!saveLeads()) { leads.shift(); alert('Could not save — this site’s storage is full.'); return; }
+  openLead(l.id);
+}
+function field(label, inner, cls) { return '<div class="field' + (cls ? ' ' + cls : '') + '"><label>' + esc(label) + '</label>' + inner + '</div>'; }
+function inp(name, l, type, extra) { return '<input name="' + name + '" type="' + (type || 'text') + '" value="' + esc(l[name]) + '"' + (extra || '') + '>'; }
+function sel(name, l, map, blank) { return '<select name="' + name + '">' + opts(map, l[name], blank) + '</select>'; }
+
+function renderLead(id) {
+  const l = findLead(id);
+  if (!l) { view.leadId = null; return render(); }
+  const hints = screeningHints(l);
+  const verdictCls = { fit: 'ok', check: 'warn', unlikely: 'bad', no: 'bad' };
+  const verdictTxt = { fit: 'Fit', check: 'Check', unlikely: 'Unlikely', no: 'No' };
+  let h = '<div class="toolbar"><button class="btn sec" id="back">‹ Leads</button><h2 style="margin:0;flex:1">' + esc(l.name || 'New lead') + '</h2>' +
+    '<button class="btn danger small" id="del">Delete</button></div>' +
+    '<form id="leadForm" autocomplete="off"><div class="two"><div>';
+
+  h += '<div class="card"><h3 style="margin-top:0">Status</h3><div class="grid">' +
+    field('Stage', sel('stage', l, STAGE_LABEL)) +
+    field('Outcome (if closed)', sel('outcome', l, OUTCOMES, '—')) +
+    field('Owner', sel('owner', l, settings.owners, '—')) +
+    field('Next follow-up', inp('followUp', l, 'date')) +
+    '</div>';
+
+  h += '<h3>Contact</h3><div class="grid">' +
+    field('Full name', inp('name', l)) + field('Email', inp('email', l, 'email')) + field('Phone', inp('phone', l, 'tel')) +
+    field('Preferred language', sel('lang', l, LANGS)) + field('Lead source', sel('source', l, SOURCES, '—')) +
+    field('Consent to contact', '<div class="checks"><label><input type="checkbox" name="consent"' + (l.consent ? ' checked' : '') + '> Agreed to be contacted</label></div>') +
+    '</div>';
+
+  h += '<h3>Current status</h3><div class="grid">' +
+    field('Nationality / citizenship', inp('nationality', l)) + field('Country of residence', inp('resCountry', l)) +
+    field('City of residence', inp('resCity', l)) + field('Age', inp('age', l, 'number', ' min="0" max="120"')) + '</div>';
+
+  h += '<h3>Who’s moving</h3><div class="grid">' +
+    field('Party', sel('party', l, PARTY)) + field('Dependants (ages)', inp('dependants', l, 'text', ' placeholder="e.g. 6, 3"')) + field('Pets', inp('pets', l)) + '</div>';
+
+  h += '<h3>Work</h3><div class="grid">' +
+    field('Occupation', inp('occupation', l)) + field('Employment mode', sel('empMode', l, EMP, '—')) +
+    field('Years experience', inp('years', l, 'number', ' min="0"')) + field('Education', inp('education', l)) + '</div>';
+
+  h += '<h3>Money</h3><div class="grid">' +
+    field('Income', '<div class="row">' + inp('income', l, 'text', ' inputmode="decimal" style="flex:2"') + sel('incomeCur', l, CURRENCIES) + sel('incomePer', l, { year: '/ year', month: '/ month' }) + '</div>', 'span2') +
+    field('Income type', sel('incomeType', l, INCOME_TYPE, '—')) +
+    field('Liquid assets (' + esc(l.incomeCur) + ')', inp('liquid', l, 'text', ' inputmode="decimal"')) +
+    field('Total assets (' + esc(l.incomeCur) + ')', inp('assets', l, 'text', ' inputmode="decimal"')) + '</div>';
+
+  h += '<h3>Intent</h3><div class="grid">' +
+    field('Destination(s)', '<div class="checks">' + DESTS.map(d => '<label><input type="checkbox" name="dest" value="' + d + '"' + (l.destinations.includes(d) ? ' checked' : '') + '> ' + d + '</label>').join('') + '</div>', 'span2') +
+    field('Timeline', sel('timeline', l, TIMELINE, '—')) +
+    field('Visa in mind', inp('visa', l)) +
+    field('The why', inp('why', l), 'span2') +
+    field('Investment interest', sel('invest', l, INVEST)) +
+    field('Property budget (' + esc(l.incomeCur) + ')', inp('investBudget', l, 'text', ' inputmode="decimal"')) +
+    field('Firm preference', sel('firm', l, FIRM)) + '</div>';
+
+  h += '<h3>Notes</h3><textarea name="notes">' + esc(l.notes) + '</textarea>' +
+    '<div class="toolbar" style="margin-top:12px"><button class="btn" type="submit">Save</button><span class="msg" id="saveMsg"></span></div></div>';
+
+  h += '</div><div>';
+  h += '<div class="card"><h3 style="margin-top:0">Screening hints</h3>';
+  if (!l.destinations.length) h += '<div class="msg">Pick a destination.</div>';
+  else if (!hints.length) h += '<div class="msg">Nothing to say yet.</div>';
+  else h += hints.map(x => '<div class="hint"><span class="pill ' + verdictCls[x.verdict] + '">' + verdictTxt[x.verdict] + '</span><div><b>' + esc(x.prog) + '</b><span>' + esc(x.note) + '</span></div></div>').join('');
+  h += '<div class="msg" style="margin-top:10px">Rule of thumb from the Ready Reckoners, on saved values. The consultant confirms.</div></div>';
+
+  h += '<div class="card" style="margin-top:14px"><h3 style="margin-top:0">Activity</h3>' +
+    '<div class="row"><input id="noteText" placeholder="Add a note"><button class="btn small" type="button" id="addNote" style="flex:0">Add</button></div>' +
+    '<ul class="log" style="margin-top:10px">' + (l.log.length ? l.log.map(e => '<li><time>' + esc(e.t.replace('T', ' ').slice(0, 16)) + '</time>' + esc(e.text) + '</li>').join('') : '<li class="msg">No activity.</li>') + '</ul></div>';
+  h += '</div></div></form>';
+  main().innerHTML = h;
+
+  el('back').onclick = () => { view.leadId = null; render(); };
+  el('del').onclick = () => {
+    if (!confirm('Delete ' + (l.name || 'this lead') + '?')) return;
+    const idx = leads.indexOf(l); leads.splice(idx, 1);
+    if (!saveLeads()) { leads.splice(idx, 0, l); alert('Could not save the change.'); return; }
+    view.leadId = null; render();
+  };
+  el('addNote').onclick = () => {
+    const t = el('noteText').value.trim(); if (!t) return;
+    addLog(l, t, 'note'); l.updated = new Date().toISOString();
+    if (!saveLeads()) { l.log.shift(); alert('Could not save — storage full.'); return; }
+    renderLead(id);
+  };
+  el('leadForm').onsubmit = e => { e.preventDefault(); saveForm(l); };
+}
+function saveForm(l) {
+  const f = el('leadForm');
+  const snap = JSON.stringify(l);
+  const fd = new FormData(f);
+  for (const k of ['name', 'email', 'phone', 'lang', 'source', 'nationality', 'resCountry', 'resCity', 'age', 'party', 'dependants', 'pets',
+    'occupation', 'empMode', 'years', 'education', 'income', 'incomeCur', 'incomePer', 'incomeType', 'liquid', 'assets',
+    'timeline', 'visa', 'why', 'invest', 'investBudget', 'firm', 'owner', 'followUp', 'notes']) l[k] = (fd.get(k) == null ? '' : String(fd.get(k))).trim();
+  l.consent = fd.get('consent') === 'on';
+  l.destinations = fd.getAll('dest');
+  const newStage = String(fd.get('stage')), outcome = String(fd.get('outcome') || '');
+  if (newStage !== l.stage || (newStage === 'closed' && outcome && outcome !== l.outcome)) setStage(l, newStage, outcome);
+  else if (newStage === 'closed') l.outcome = outcome || l.outcome || 'notyet';
+  l.updated = new Date().toISOString();
+  if (!saveLeads()) { Object.assign(l, JSON.parse(snap)); el('saveMsg').textContent = 'Not saved — this site’s storage is full.'; el('saveMsg').classList.add('err'); return; }
+  renderLead(l.id);
+  el('saveMsg').textContent = 'Saved.';
+}
+
+// -- Pipeline
+function renderPipeline() {
+  let h = '<div class="board">';
+  for (const [key, label] of STAGES) {
+    const items = leads.filter(l => l.stage === key).sort((a, b) => (a.followUp || 'z') < (b.followUp || 'z') ? -1 : 1);
+    h += '<div class="col" data-stage="' + key + '"><h4>' + esc(label) + '<span>' + items.length + '</span></h4>';
+    for (const l of items) {
+      const i = STAGE_INDEX[key];
+      h += '<div class="kcard' + (isLate(l) ? ' late' : '') + '" draggable="true" data-id="' + l.id + '"><b>' + esc(l.name || '(unnamed)') + '</b>' +
+        '<small>' + esc(l.destinations.join(', ') || '—') + ' · ' + esc(l.owner || '—') + '</small>' +
+        (l.followUp && key !== 'closed' ? '<small' + (isLate(l) ? ' class="late-text"' : '') + '>Follow-up ' + esc(l.followUp) + '</small>' : '') +
+        (key === 'closed' ? '<small>' + esc(OUTCOMES[l.outcome] || '') + '</small>' : '') +
+        '<div class="mv"><button data-mv="-1"' + (i === 0 ? ' disabled' : '') + '>‹</button><button data-mv="1"' + (i === STAGES.length - 1 ? ' disabled' : '') + '>›</button></div></div>';
+    }
+    h += '</div>';
+  }
+  h += '</div>';
+  main().innerHTML = h;
+  document.querySelectorAll('.kcard').forEach(c => {
+    c.onclick = e => { if (e.target.tagName !== 'BUTTON') openLead(c.dataset.id); };
+    c.ondragstart = e => { e.dataTransfer.setData('text/plain', c.dataset.id); };
+    c.querySelectorAll('button[data-mv]').forEach(b => b.onclick = e => {
+      e.stopPropagation();
+      const l = findLead(c.dataset.id); const to = STAGES[STAGE_INDEX[l.stage] + Number(b.dataset.mv)];
+      if (to) moveLead(l, to[0]);
+    });
+  });
+  document.querySelectorAll('.col').forEach(col => {
+    col.ondragover = e => { e.preventDefault(); col.classList.add('over'); };
+    col.ondragleave = () => col.classList.remove('over');
+    col.ondrop = e => { e.preventDefault(); col.classList.remove('over'); const l = findLead(e.dataTransfer.getData('text/plain')); if (l) moveLead(l, col.dataset.stage); };
+  });
+}
+function moveLead(l, stage) {
+  const snap = JSON.stringify(l);
+  let outcome = '';
+  if (stage === 'closed') { const o = prompt('Outcome: won, lost or notyet', 'won'); if (o == null) return; outcome = OUTCOMES[o.trim().toLowerCase()] ? o.trim().toLowerCase() : 'notyet'; }
+  setStage(l, stage, outcome);
+  if (!saveLeads()) { Object.assign(l, JSON.parse(snap)); alert('Could not save the change.'); return; }
+  renderPipeline();
+}
+
+// -- Dashboard
+function renderDashboard() {
+  const open = leads.filter(l => l.stage !== 'closed');
+  const heldN = leads.filter(l => STAGE_INDEX[l.stage] >= STAGE_INDEX.held).length;
+  const agreedN = leads.filter(l => STAGE_INDEX[l.stage] >= STAGE_INDEX.agreed && !(l.stage === 'closed' && l.outcome !== 'won')).length;
+  const conv = heldN ? Math.round(100 * agreedN / heldN) : null;
+  const late = leads.filter(isLate);
+  const won = leads.filter(l => l.stage === 'closed' && l.outcome === 'won').length;
+  const paidN = leads.filter(l => STAGE_INDEX[l.stage] >= STAGE_INDEX.paid && l.stage !== 'closed').length + won;
+  const count = (arr, key) => { const m = {}; arr.forEach(l => { const ks = key(l); (Array.isArray(ks) ? ks : [ks]).forEach(k => { k = k || '—'; m[k] = (m[k] || 0) + 1; }); }); return m; };
+  const bars = (m, order) => {
+    const keys = order || Object.keys(m).sort((a, b) => m[b] - m[a]); const max = Math.max(1, ...Object.values(m));
+    return '<div class="bars">' + keys.map(k => '<div>' + esc(k) + '</div><div class="bar"><i style="width:' + (100 * (m[k] || 0) / max) + '%"></i></div><div class="v">' + (m[k] || 0) + '</div>').join('') + '</div>';
+  };
+  let h = '<div class="stats">' +
+    stat(leads.length, 'Leads') + stat(open.length, 'Open') + stat(conv == null ? '—' : conv + '%', 'Free call → paid consult') +
+    stat(paidN, 'Paid consultations') + stat(won, 'Won') + stat(late.length, 'Overdue follow-ups', late.length ? 'late-text' : '') + '</div>';
+  h += '<div class="cols3">' +
+    '<div class="card"><h3 style="margin-top:0">By stage</h3>' + bars(count(leads, l => STAGE_LABEL[l.stage]), STAGES.map(s => s[1])) + '</div>' +
+    '<div class="card"><h3 style="margin-top:0">By destination</h3>' + bars(count(open, l => l.destinations)) + '</div>' +
+    '<div class="card"><h3 style="margin-top:0">By owner (open)</h3>' + bars(count(open, l => l.owner)) + '</div>' +
+    '<div class="card"><h3 style="margin-top:0">By source</h3>' + bars(count(leads, l => l.source)) + '</div>' +
+    '</div>';
+  h += '<div class="card" style="margin-top:14px"><h3 style="margin-top:0">Overdue follow-ups</h3>' +
+    (late.length ? '<div class="tablewrap"><table><thead><tr><th>Name</th><th>Stage</th><th>Owner</th><th>Due</th></tr></thead><tbody>' +
+      late.sort((a, b) => a.followUp < b.followUp ? -1 : 1).map(l => '<tr data-id="' + l.id + '"><td class="name">' + esc(l.name) + '</td><td>' + stagePill(l) + '</td><td>' + esc(l.owner) + '</td><td class="late-text">' + esc(l.followUp) + '</td></tr>').join('') +
+      '</tbody></table></div>' : '<div class="msg">None.</div>') + '</div>';
+  main().innerHTML = h;
+  document.querySelectorAll('tr[data-id]').forEach(tr => tr.onclick = () => openLead(tr.dataset.id));
+}
+function stat(n, label, cls) { return '<div class="stat"><div class="n' + (cls ? ' ' + cls : '') + '">' + esc(n) + '</div><div class="l">' + esc(label) + '</div></div>'; }
+
+// ---- Backup & Restore (same shape as the other apps) ------------------------
+function backupData() { return { leads: leads, settings: settings }; }
+function backupText() { return JSON.stringify({ app: 'mmg-crm', v: 1, exported: new Date().toISOString(), data: backupData() }, null, 1); }
+function backupFilename() { return 'mmg-crm-backup-' + todayStr() + '.json'; }
+function validBackup(data) { return !!data && Array.isArray(data.leads) && data.leads.every(l => l && typeof l === 'object'); }
+function parseBackup(text) {
+  let obj; try { obj = JSON.parse(text); } catch (e) { return { error: 'That is not valid JSON.' }; }
+  if (obj && obj.app && obj.app !== 'mmg-crm') return { error: 'That is a backup from ' + obj.app + ', not this app.' };
+  const data = obj && obj.app ? obj.data : obj;
+  if (!validBackup(data)) return { error: 'That does not look like an MMG CRM backup.' };
+  return { data: data };
+}
+function applyBackup(data) {
+  const snapL = leads, snapS = settings;
+  leads = data.leads.map(normalise);
+  if (data.settings && Array.isArray(data.settings.owners) && data.settings.owners.length) settings = data.settings;
+  if (!saveLeads() || !saveSettings()) { leads = snapL; settings = snapS; saveLeads(); saveSettings(); return false; }
+  return true;
+}
+function restoreFromText(text, confirmed) {
+  const r = parseBackup(text); if (r.error) return r.error;
+  if (!confirmed && !confirm('Replace all ' + leads.length + ' leads with the ' + r.data.leads.length + ' in this backup?')) return 'Cancelled.';
+  return applyBackup(r.data) ? 'Restored ' + leads.length + ' leads.' : 'Restore failed — storage full. Nothing changed.';
+}
+function csvText() {
+  const cols = ['name', 'stage', 'outcome', 'owner', 'followUp', 'email', 'phone', 'lang', 'source', 'consent', 'nationality', 'resCountry', 'resCity', 'age', 'party', 'dependants', 'pets',
+    'occupation', 'empMode', 'years', 'education', 'income', 'incomeCur', 'incomePer', 'incomeType', 'liquid', 'assets', 'destinations', 'why', 'timeline', 'visa', 'invest', 'investBudget', 'firm', 'notes', 'created', 'updated'];
+  const cell = v => { v = Array.isArray(v) ? v.join('; ') : v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  return [cols.join(',')].concat(leads.map(l => cols.map(c => cell(l[c])).join(','))).join('\n');
+}
+function download(text, name, type) {
+  const blob = new Blob([text], { type: type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+function renderData() {
+  let h = '<div class="cols3">';
+  h += '<div class="card"><h3 style="margin-top:0">Sample data</h3>' +
+    '<div class="toolbar"><button class="btn" id="loadSample">Load sample leads</button><button class="btn danger" id="clearAll">Clear all leads</button></div>' +
+    '<div class="msg" id="sampleMsg">' + leads.length + ' leads stored in this browser.</div></div>';
+  h += '<div class="card"><h3 style="margin-top:0">Owners</h3><textarea id="owners">' + esc(settings.owners.join('\n')) + '</textarea>' +
+    '<div class="toolbar" style="margin-top:8px"><button class="btn" id="saveOwners">Save owners</button><span class="msg" id="ownerMsg">One per line.</span></div></div>';
+  h += '<div class="card"><h3 style="margin-top:0">Export</h3>' +
+    '<div class="toolbar"><button class="btn" id="dlJson">Download backup (JSON)</button><button class="btn sec" id="dlCsv">Download CSV</button><button class="btn sec" id="copyJson">Copy backup text</button></div>' +
+    '<div class="msg" id="exportMsg"></div></div>';
+  h += '<div class="card"><h3 style="margin-top:0">Restore</h3>' +
+    '<div class="toolbar"><input type="file" id="restoreFile" accept=".json,application/json"></div>' +
+    '<textarea id="restoreText" placeholder="Or paste backup text here"></textarea>' +
+    '<div class="toolbar" style="margin-top:8px"><button class="btn sec" id="restoreBtn">Restore from text</button><span class="msg" id="restoreMsg"></span></div></div>';
+  h += '</div><footer>All data is stored only in this browser (localStorage). Build ' + BUILD + '</footer>';
+  main().innerHTML = h;
+
+  el('loadSample').onclick = () => {
+    if (leads.length && !confirm('Add 12 sample leads to the ' + leads.length + ' already here?')) return;
+    const snap = leads; leads = sampleLeads().concat(leads);
+    if (!saveLeads()) { leads = snap; el('sampleMsg').textContent = 'Could not save — storage full.'; return; }
+    renderData(); el('sampleMsg').textContent = 'Sample leads loaded. ' + leads.length + ' leads stored.';
+  };
+  el('clearAll').onclick = () => {
+    if (!confirm('Delete all ' + leads.length + ' leads? Take a backup first if you want them back.')) return;
+    const snap = leads; leads = [];
+    if (!saveLeads()) { leads = snap; return; }
+    renderData();
+  };
+  el('saveOwners').onclick = () => {
+    const list = el('owners').value.split('\n').map(s => s.trim()).filter(Boolean);
+    if (!list.length) { el('ownerMsg').textContent = 'Need at least one owner.'; return; }
+    settings.owners = list; el('ownerMsg').textContent = saveSettings() ? 'Saved.' : 'Could not save.';
+  };
+  el('dlJson').onclick = () => download(backupText(), backupFilename(), 'application/json');
+  el('dlCsv').onclick = () => download(csvText(), 'mmg-crm-leads-' + todayStr() + '.csv', 'text/csv');
+  el('copyJson').onclick = async () => {
+    try { await navigator.clipboard.writeText(backupText()); el('exportMsg').textContent = 'Copied.'; }
+    catch (e) { el('exportMsg').textContent = 'Clipboard blocked — use the download instead.'; }
+  };
+  el('restoreBtn').onclick = () => { const m = restoreFromText(el('restoreText').value); renderDataKeepMsg(m); };
+  el('restoreFile').onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => { const m = restoreFromText(String(rd.result)); renderDataKeepMsg(m); };
+    rd.readAsText(f);
+  };
+}
+function renderDataKeepMsg(m) { renderData(); el('restoreMsg').textContent = m; }
+
+// ---- Boot --------------------------------------------------------------------
+function boot() {
+  loadAll();
+  document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+  el('newLead').onclick = newLead;
+  render();
+}
+if (typeof document !== 'undefined' && document.getElementById('main')) boot();
+</script>
+</body>
+</html>
