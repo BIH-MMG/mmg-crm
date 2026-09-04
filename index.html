@@ -159,7 +159,7 @@
 <script>
 'use strict';
 // BUILD is checked against the live file after each deploy.
-const BUILD = '2026-09-04-2';
+const BUILD = '2026-09-04-3';
 
 // ---- Reference data ----------------------------------------------------------
 const STAGES = [
@@ -406,78 +406,89 @@ function screeningHints(lead) {
 }
 
 // ---- Sample data -------------------------------------------------------------
+// The 58 practice callers from the Call Training sets (Canada & Spain 1–5, Malta & Thailand 1–5).
+// Basics only, on purpose: name, age, home, nationality, occupation, destinations, party, timeline, the "why".
+// No financials, visa-in-mind, investment or firm preference — those stay in the training files.
+const TRAINING = [
+  ['Ryan Castellano', 36, 'Seattle, Washington', 'United States', 'United States', 'Senior product manager', ['Thailand'], 'solo', '', '3-6', 'Wants to keep his US job from Bangkok'],
+  ['Frank & Carol Whitaker', 63, 'Tucson, Arizona', 'United States', 'United States', 'Retired', ['Thailand'], 'couple', '', '6-12', 'Retire to Chiang Mai; assume healthcare comes with it'],
+  ['Marcus & Dana Ellison', 46, 'Charlotte, North Carolina', 'United States', 'United States', 'Sold a logistics company', ['Malta'], 'family', '', '6-12', 'Wants EU permanent status now, without moving yet'],
+  ['Gerald Pruitt', 54, 'Naples, Florida', 'United States', 'United States', 'Retired wealth manager', ['Malta'], 'couple', '', '6-12', 'Read about the 15% rate; wants a Mediterranean base'],
+  ['Nate Okafor', 41, 'Denver, Colorado', 'United States', 'United States', 'Exited a startup', ['Thailand'], 'solo', '', '3-6', 'Thinks buying a condo gets him residency'],
+  ['Delia Ferraro-Nakamura', 48, 'Portland, Oregon', 'United States', 'United States', 'Retired early', ['Thailand'], 'solo', '', 'now', 'Wants the ten-year visa two years before she can have it'],
+  ['Ade Balogun-Whitcombe', 39, 'Newark, New Jersey', 'United States', 'United States', 'Data engineer', ['Thailand'], 'couple', '', '3-6', 'Career-changer who assumes his old career counts'],
+  ['Bill & Rosa Sandoval', 57, 'Scottsdale, Arizona', 'United States', 'United States', 'Semi-retired', ['Malta'], 'couple', '', '12+', 'Want permanent EU status; short of the asset test today'],
+  ['Hugh Trelawney-Adeyemi', 61, 'Charleston, South Carolina', 'United States', 'United States', 'Retired shipping executive', ['Malta'], 'couple', '', '6-12', 'Wants the 15% rate; will not say where he will actually be'],
+  ['Priya & Michael Vance-Raman', 52, 'Denver, Colorado', 'United States', 'United States', 'Retiring', ['Thailand'], 'couple', '', '6-12', 'Clear $80k together; neither clears it alone'],
+  ['Constance Ekwueme', 66, 'Sacramento, California', 'United States', 'United States', 'Retired surgeon', ['Malta'], 'solo', '', '6-12', 'Clean fit on paper; wants to know what insurance will cover'],
+  ['Ramon Ellsworth-Diaz', 43, 'Miami, Florida', 'United States', 'United States', 'Security architect', ['Thailand'], 'solo', '', '6-12', 'Wants Work-from-Thailand; is not employed by anyone'],
+  ['Piet & Marguerite Achterberg', 58, 'Milwaukee, Wisconsin', 'United States', 'United States', 'Retired', ['Thailand'], 'couple', '', '3-6', 'A year of research, and a father in Rotterdam'],
+  ['Yusuf & Nadia Karam', 55, 'Dearborn, Michigan', 'United States', 'United States', 'Retired / retiring', ['Thailand'], 'couple', '', '6-12', '“We have $1.2M” — almost none of it is his'],
+  ['Georgina Poole-Adeyinka', 49, 'Raleigh, North Carolina', 'United States', 'United States', 'Sold a software stake', ['Malta'], 'family', '', '6-12', 'Qualifies easily; her 78-year-old mother is coming too'],
+  ['Frank & Odette Ivory', 63, 'Sarasota, Florida', 'United States', 'United States', 'Retired', ['Malta'], 'couple', '', '6-12', 'Want the 15%; will not give up six months in Florida'],
+  ['Wren Ashcombe-Nakagawa', 45, 'Santa Fe, New Mexico', 'United States', 'United States', 'Writer', ['Thailand'], 'solo', '', '3-6', 'Has a signed book contract and calls it not-work'],
+  ['Dorothea Lindqvist-Amara', 59, 'Boston, Massachusetts', 'United States', 'United States', 'Retired academic administrator', ['Malta'], 'solo', '', '6-12', 'Will not pay for a consultation without one'],
+  ['Curtis Mbeki-Rowan', 52, 'Denver, Colorado', 'United States', 'United States', 'Sold a logistics software company', ['Malta'], 'couple', '', '3-6', 'Quoting a superseded copy of MMG’s Spain sheet'],
+  ['Anita Sriskandarajah', 38, 'Seattle, Washington', 'United States', 'United States', 'UX director', ['Canada', 'Thailand'], 'solo', '', '6-12', 'Wants her Toronto sister to be a route'],
+  ['Gil Brannigan-Osei', 47, 'Phoenix, Arizona', 'United States', 'United States', 'Sales director', ['Thailand'], 'couple', '', '3-6', 'Asks you to agree nobody checks'],
+  ['Marisol Deveraux-Tan', 61, 'San Diego, California', 'United States', 'United States', 'Retired orthodontist', ['Spain', 'Malta'], 'solo', '', 'now', 'Set on the Spanish Golden Visa'],
+  ['Trent Whitlow', 44, 'Nashville, Tennessee', 'United States', 'United States', 'Music-rights investor', ['Malta'], 'couple', '', '6-12', 'Wants the consultation free for referrals'],
+  ['Naomi & Ruth Castellanos-Byrne', 57, 'Ann Arbor, Michigan', 'United States', 'United States', 'Retired / retiring', ['Malta'], 'couple', '', '6-12', 'Ruth’s diagnosis, and what a policy will cover'],
+  ['Desmond Achara-Fitzgibbon', 41, 'Baltimore, Maryland', 'United States', 'United States', 'Software engineering manager', ['Thailand'], 'family', '', '3-6', 'Taking a 15-year-old; the mother has joint custody'],
+  ['Ike & Bernadette Pemberton-Okoye', 49, 'Columbus, Ohio', 'United States', 'United States', 'Engineer / pharmacist', ['Canada', 'Thailand'], 'family', '', '12+', 'Son is type 1 diabetic; the healthcare models differ completely'],
+  ['Rafael Sunderland-Ihejirika', 53, 'Tampa, Florida', 'United States', 'United States', 'Sold a restaurant group', ['Malta'], 'couple', '', '6-12', 'Wants the 15% and a Valletta restaurant'],
+  ['Alastair Meech', 68, 'Portland, Maine', 'United States', 'United States', 'Retired marine surveyor', ['Malta'], 'solo', '', 'now', 'Widowed eleven weeks; wants to be gone in three months'],
+  ['Sunny Rasmussen-Adeleke', 36, 'Chiang Mai', 'Thailand', 'United States', 'Sold a business in 2024', ['Thailand'], 'solo', '', 'now', 'Fourteen months of border runs and now frightened'],
+  ['Marcus Delaney', 44, 'Boise, Idaho', 'United States', 'United States', 'Journeyman electrician', ['Canada'], 'family', '', '12+', 'Thinks no degree means no chance'],
+  ['Priya Raghunathan', 29, 'Seattle, Washington', 'United States', 'United States', 'Data analyst, W-2 employee', ['Spain'], 'solo', '', 'now', 'Wants to apply on a trip in 3 weeks'],
+  ['Nathan & Sofia Cole', 41, 'Charlotte, North Carolina', 'United States', 'United States', 'Engineer and remote marketing manager', ['Canada', 'Spain'], 'family', '', '6-12', 'Agree on leaving, disagree on where'],
+  ['Dee Whitfield', 58, 'Portland, Oregon', 'United States', 'United States', 'Former dental practice owner, now a landlord', ['Spain'], 'solo', '', '6-12', 'Assumes the retirement visa is a formality'],
+  ['Devon Achebe', 26, 'Atlanta, Georgia', 'United States', 'United States', 'Junior mechanical engineer', ['Canada'], 'solo', '', 'now', 'Thinks his age guarantees it'],
+  ['Rhonda Piersall', 49, 'Cleveland, Ohio', 'United States', 'United States', '', ['Canada', 'Spain'], 'solo', '', 'exploring', 'Wants options without giving facts'],
+  ['Ken Sorensen', 52, 'Milwaukee, Wisconsin', 'United States', 'United States', 'Operations manager', ['Canada'], 'couple', '', '12+', 'Right route, wrong province'],
+  ['Bernadette “Birdie” Coyle', 63, 'Vero Beach, Florida', 'United States', 'United States', 'Retired hospital administrator', ['Spain'], 'solo', '', '6-12', 'The plan that defeats the goal'],
+  ['Marisol Vega Delgado', 36, 'Sacramento, California', 'United States', 'United States', 'Freelance illustrator', ['Spain'], 'solo', '', '6-12', 'Mentions her father in passing'],
+  ['Trevor Blaine', 39, 'Kansas City, Missouri', 'United States', 'United States', 'Construction project manager', ['Canada'], 'family', '', '12+', 'Every number shrinks under questioning'],
+  ['Emeka Okonkwo & Valeria Reyes', 45, 'Houston, Texas', 'United States', 'Nigeria / United States', 'Process engineer and dental hygienist', ['Canada', 'Spain'], 'family', '', '12+', 'The family you assumed were American'],
+  ['Sandra Ruiz-Whitmore', 44, 'Albuquerque, New Mexico', 'United States', 'United States', 'Remote HR consultant', ['Spain'], 'family', '', '6-12', 'Her best client is eight months old'],
+  ['Curtis Vandenberg', 50, 'Dallas, Texas', 'United States', 'United States', 'Regional sales director', ['Canada'], 'couple', '', '6-12', 'Wants you to beat a guarantee'],
+  ['Yolanda Prieto-Marsh', 33, 'Miami, Florida', 'United States', 'United States', 'Freelance social media manager', ['Spain'], 'solo', '', '3-6', 'Asks you to hide where the money comes from'],
+  ['Hugh & Marion Danforth', 68, 'Scottsdale, Arizona', 'United States', 'United States', 'Retired airline pilot and retired teacher', ['Spain'], 'couple', '', 'now', 'Movers booked, rule not checked'],
+  ['Rohan Bhattacharya', 40, 'San Jose, California', 'United States', 'India', 'Senior software engineer', ['Canada'], 'family', '', 'now', 'Needs 60 days; the process needs more'],
+  ['Cassandra Roule', 55, 'Boston, Massachusetts', 'United States', 'United States', 'Retired consulting partner', ['Spain', 'Other'], 'solo', '', '12+', 'Confidently quotes outdated rules'],
+  ['Wendell Sharpe', 58, 'Las Vegas, Nevada', 'United States', 'United States', 'Semi-retired commercial real estate broker', ['Spain'], 'couple', '', '6-12', 'Asks you to leave it out of the notes'],
+  ['Naomi Frazier', 41, 'Tacoma, Washington', 'United States', 'United States', 'Pediatric occupational therapist', ['Canada'], 'family', '', '6-12', 'A consent question dressed as paperwork'],
+  ['Elias Wren', 71, 'Charleston, South Carolina', 'United States', 'United States', 'Retired professor of music', ['Spain'], 'solo', '', 'exploring', 'Needs more than fifteen minutes'],
+  ['Priyanka Mokoena', 34, 'Newark, New Jersey', 'United States', 'United States', 'Pharmacovigilance specialist', ['Canada', 'Spain'], 'family', '', '12+', 'Two countries, two different machines'],
+  ['Gideon Marsh', 47, 'Boulder, Colorado', 'United States', 'United States', 'Management consultant', ['Spain'], 'solo', '', '3-6', 'His plan dismantles his own visa'],
+  ['Amara Osei-Turner', 39, 'Baltimore, Maryland', 'United States', 'United States', 'Hospital pharmacist', ['Canada', 'Spain'], 'family', '', '12+', 'Her mother is a separate application'],
+  ['Michael Reese', 45, 'Columbus, Ohio', 'United States', 'United States', '', ['Canada'], 'family', '', '12+', 'Interviews you before he’ll talk'],
+  ['Daniel Kwon', 31, 'Austin, Texas', 'United States', 'United States', 'Backend software engineer', ['Canada'], 'solo', '', '6-12', 'Wants long-term stability and a PR/citizenship path'],
+  ['Chloe Bennett', 34, 'Denver, Colorado', 'United States', 'United States', 'Freelance UX/product designer', ['Canada', 'Spain'], 'solo', 'Dog', 'exploring', 'Torn between an EU lifestyle move and a PR route'],
+  ['Robert & Linda Harmon', 64, 'Sarasota, Florida', 'United States', 'United States', 'Retired', ['Spain'], 'couple', 'Dog', '6-12', 'Retire on the coast; no plans to work'],
+  ['Tony Marchetti', 56, 'Nashville, Tennessee', 'United States', 'United States', 'Owner of a home-services company', ['Spain'], 'couple', '', 'exploring', 'Asking about the “Golden Visa” he read about'],
+  ['Aisha Campbell', 38, 'Minneapolis, Minnesota', 'United States', 'United States', 'ICU registered nurse', ['Canada'], 'family', '', '3-6', 'In-demand nurse; wants a fast, stable move'],
+];
+const SAMPLE_STAGES = ['new', 'booked', 'held', 'new', 'agreed', 'held', 'booked', 'handoff', 'new', 'scheduled', 'held', 'paid', 'new', 'consult', 'booked', 'service', 'closed', 'held', 'closed', 'new'];
 function sampleLeads() {
   const d = n => { const t = new Date(); t.setDate(t.getDate() + n); return t.toISOString().slice(0, 10); };
   const ago = n => { const t = new Date(); t.setDate(t.getDate() - n); return t.toISOString(); };
-  const mk = (o, daysAgo) => {
-    const l = Object.assign(blankLead(), o);
+  return TRAINING.map((r, i) => {
+    const [name, age, resCity, resCountry, nationality, occupation, destinations, party, pets, timeline, why] = r;
+    const stage = SAMPLE_STAGES[i % SAMPLE_STAGES.length];
+    const daysAgo = 2 + (i * 7) % 85;
+    const l = Object.assign(blankLead(), {
+      name, age, resCity, resCountry, nationality, occupation, destinations: destinations.slice(), party, pets, timeline, why,
+      email: name.toLowerCase().replace(/[“”"]/g, '').replace(/[^a-z ]/g, '').trim().replace(/ +/g, '.') + '@example.com',
+      consent: true, owner: OWNERS_DEFAULT[i % OWNERS_DEFAULT.length], stage,
+      outcome: stage === 'closed' ? ['won', 'lost', 'notyet'][i % 3] : '',
+      followUp: stage === 'closed' ? '' : d((i * 5) % 9 - 3),
+    });
     l.created = ago(daysAgo); l.updated = ago(Math.max(0, daysAgo - 2));
     l.log = [{ t: l.created, text: 'Lead created', kind: 'stage' }];
-    if (l.stage !== 'new') l.log.unshift({ t: l.updated, text: 'New lead → ' + STAGE_LABEL[l.stage], kind: 'stage' });
+    if (stage !== 'new') l.log.unshift({ t: l.updated, text: 'New lead → ' + STAGE_LABEL[stage] + (stage === 'closed' ? ' (' + OUTCOMES[l.outcome] + ')' : ''), kind: 'stage' });
     return l;
-  };
-  return [
-    mk({ name: 'Daniel Kwon', email: 'daniel.kwon@example.com', phone: '+1 512 555 0142', source: 'Website form', consent: true,
-      nationality: 'United States', resCountry: 'United States', resCity: 'Austin, TX', age: 31, party: 'solo',
-      occupation: 'Software engineer', empMode: 'remote', years: 8, education: "Bachelor's", income: 145000, incomeCur: 'USD', incomePer: 'year', incomeType: 'remote', liquid: 90000, assets: 260000,
-      destinations: ['Spain'], why: 'Remote work from Europe, lifestyle', timeline: '3-6', visa: 'Digital Nomad Visa', invest: 'rent', firm: 'small',
-      owner: 'Brian H.', stage: 'held', followUp: d(-1), notes: 'Employer is 6 years old, no Spanish clients.' }, 5),
-    mk({ name: 'Margaret Ellis', email: 'm.ellis@example.com', phone: '+1 415 555 0177', source: 'Referral', consent: true,
-      nationality: 'United States', resCountry: 'United States', resCity: 'San Francisco, CA', age: 63, party: 'couple',
-      occupation: 'Retired teacher', empMode: 'retired', education: "Master's", income: 5800, incomeCur: 'USD', incomePer: 'month', incomeType: 'pension', liquid: 420000, assets: 1300000,
-      destinations: ['Spain', 'Malta'], why: 'Retirement, warmer climate', timeline: '6-12', visa: 'Non-Lucrative Visa', invest: 'buy', investBudget: 350000, firm: 'large',
-      owner: 'Ana R.', stage: 'agreed', followUp: d(1), notes: 'Husband 65, also retired.' }, 9),
-    mk({ name: 'Priya Natarajan', email: 'priya.n@example.com', phone: '+1 647 555 0119', source: 'Social media', consent: true,
-      nationality: 'India', resCountry: 'United States', resCity: 'Seattle, WA', age: 34, party: 'family', dependants: '6, 3',
-      occupation: 'Registered nurse', empMode: 'employed', years: 10, education: "Bachelor's", income: 98000, incomeCur: 'USD', incomePer: 'year', incomeType: 'salary', liquid: 45000, assets: 120000,
-      destinations: ['Canada'], why: 'Healthcare career, family future', timeline: '6-12', visa: 'Express Entry', invest: 'rent', firm: 'none',
-      owner: 'Tom K.', stage: 'scheduled', followUp: d(2) }, 12),
-    mk({ name: 'Robert Hale', email: 'rhale@example.com', phone: '+1 303 555 0163', source: 'Webinar', consent: true,
-      nationality: 'United States', resCountry: 'United States', resCity: 'Denver, CO', age: 54, party: 'couple',
-      occupation: 'Sold a logistics business', empMode: 'retired', education: "Bachelor's", income: 120000, incomeCur: 'USD', incomePer: 'year', incomeType: 'passive', liquid: 900000, assets: 2400000,
-      destinations: ['Thailand'], why: 'Early retirement, low cost of living', timeline: 'now', visa: 'Thailand Elite', invest: 'buy', investBudget: 250000, firm: 'large',
-      owner: 'Brian H.', stage: 'paid', followUp: d(4) }, 20),
-    mk({ name: 'Lucía Fernández', email: 'lucia.f@example.com', phone: '+34 600 555 021', lang: 'Spanish', source: 'Partner', consent: true,
-      nationality: 'Mexico', resCountry: 'Mexico', resCity: 'Guadalajara', age: 29, party: 'solo',
-      occupation: 'UX designer', empMode: 'freelance', years: 5, education: "Bachelor's", income: 2200, incomeCur: 'USD', incomePer: 'month', incomeType: 'remote', liquid: 12000, assets: 20000,
-      destinations: ['Spain'], why: 'EU base, Spanish citizenship in 2 years', timeline: '3-6', visa: 'Digital Nomad Visa', invest: 'rent', firm: 'small',
-      owner: 'Ana R.', stage: 'booked', followUp: d(0) }, 2),
-    mk({ name: 'James & Helen Whitford', email: 'whitfords@example.com', phone: '+44 20 7946 0958', source: 'Referral', consent: true,
-      nationality: 'United Kingdom', resCountry: 'United Kingdom', resCity: 'Bristol', age: 58, party: 'couple',
-      occupation: 'Company director', empMode: 'owner', years: 30, education: "Bachelor's", income: 190000, incomeCur: 'GBP', incomePer: 'year', incomeType: 'business', liquid: 400000, assets: 1900000,
-      destinations: ['Malta'], why: 'Tax residence, EU access', timeline: '6-12', visa: 'MPRP', invest: 'buy', investBudget: 450000, firm: 'large',
-      owner: 'Tom K.', stage: 'service', followUp: d(10), notes: 'Accredited Agent engaged via partner.' }, 40),
-    mk({ name: 'Trent Whitlow', email: 'trent.w@example.com', phone: '+1 602 555 0134', source: 'Website form', consent: false,
-      nationality: 'United States', resCountry: 'United States', resCity: 'Phoenix, AZ', age: 41, party: 'solo',
-      occupation: 'Sales manager', empMode: 'employed', years: 15, education: 'High school', income: 85000, incomeCur: 'USD', incomePer: 'year', incomeType: 'salary', liquid: 15000, assets: 40000,
-      destinations: ['Thailand', 'Malta'], why: 'Wants out of the US, asked for a discount', timeline: 'exploring', visa: 'Whatever is cheapest', invest: 'none', firm: 'small',
-      owner: 'Brian H.', stage: 'closed', outcome: 'notyet', followUp: '', notes: 'Not ready; revisit in Q1.' }, 15),
-    mk({ name: 'Mei Lin Chao', email: 'meilin@example.com', phone: '+1 213 555 0188', lang: 'Chinese', source: 'Social media', consent: true,
-      nationality: 'Taiwan', resCountry: 'United States', resCity: 'Los Angeles, CA', age: 38, party: 'family', dependants: '9', pets: 'Dog',
-      occupation: 'E-commerce business owner', empMode: 'owner', years: 12, education: "Master's", income: 210000, incomeCur: 'USD', incomePer: 'year', incomeType: 'business', liquid: 300000, assets: 1100000,
-      destinations: ['Canada', 'Thailand'], why: 'Children’s education, business expansion', timeline: '6-12', visa: 'Not sure', invest: 'buy', investBudget: 600000, firm: 'large',
-      owner: 'Ana R.', stage: 'new', followUp: d(1) }, 1),
-    mk({ name: 'Olivier Marchand', email: 'o.marchand@example.com', phone: '+1 514 555 0102', lang: 'French', source: 'Webinar', consent: true,
-      nationality: 'France', resCountry: 'Canada', resCity: 'Montreal, QC', age: 45, party: 'couple',
-      occupation: 'Architect', empMode: 'remote', years: 20, education: "Master's", income: 7000, incomeCur: 'CAD', incomePer: 'month', incomeType: 'remote', liquid: 80000, assets: 350000,
-      destinations: ['Spain'], why: 'Return to Europe, keep Canadian clients', timeline: '12+', visa: 'Digital Nomad Visa', invest: 'rent', firm: 'none',
-      owner: 'Tom K.', stage: 'held', followUp: d(-3) }, 7),
-    mk({ name: 'Sandra Okafor', email: 'sandra.o@example.com', phone: '+1 404 555 0155', source: 'Website form', consent: true,
-      nationality: 'United States', resCountry: 'United States', resCity: 'Atlanta, GA', age: 36, party: 'family', dependants: '4, 2',
-      occupation: 'Physician assistant', empMode: 'employed', years: 9, education: "Master's", income: 130000, incomeCur: 'USD', incomePer: 'year', incomeType: 'salary', liquid: 60000, assets: 200000,
-      destinations: ['Canada'], why: 'Sister in Ontario, safer schools', timeline: '3-6', visa: 'Family sponsorship?', invest: 'rent', firm: 'small',
-      owner: 'Brian H.', stage: 'consult', followUp: d(3) }, 25),
-    mk({ name: 'Kenji Arai', email: 'k.arai@example.com', phone: '+1 808 555 0121', lang: 'Japanese', source: 'Referral', consent: true,
-      nationality: 'Japan', resCountry: 'United States', resCity: 'Honolulu, HI', age: 52, party: 'solo',
-      occupation: 'Restaurant owner', empMode: 'owner', years: 25, education: "Bachelor's", income: 95000, incomeCur: 'USD', incomePer: 'year', incomeType: 'business', liquid: 150000, assets: 700000,
-      destinations: ['Thailand'], why: 'Second base in Asia, semi-retire', timeline: '6-12', visa: 'LTR', invest: 'rent', firm: 'small',
-      owner: 'Ana R.', stage: 'handoff', followUp: d(-2) }, 11),
-    mk({ name: 'Grace Lindqvist', email: 'grace.l@example.com', phone: '+1 612 555 0199', source: 'Other', consent: true,
-      nationality: 'United States', resCountry: 'United States', resCity: 'Minneapolis, MN', age: 27, party: 'solo',
-      occupation: 'Graduate student', empMode: 'student', years: 1, education: "Master's (in progress)", income: 0, incomeCur: 'USD', incomePer: 'year', incomeType: 'none', liquid: 8000, assets: 8000,
-      destinations: ['Spain', 'Other'], why: 'Study, then work in Europe', timeline: '12+', visa: 'Student visa', invest: 'none', firm: 'none',
-      owner: 'Tom K.', stage: 'closed', outcome: 'lost', followUp: '', notes: 'Outside scope for now; referred to university.' }, 30),
-  ];
+  });
 }
 
 // ---- Rendering ---------------------------------------------------------------
@@ -802,7 +813,7 @@ function renderData() {
   main().innerHTML = h;
 
   el('loadSample').onclick = () => {
-    if (leads.length && !confirm('Add 12 sample leads to the ' + leads.length + ' already here?')) return;
+    if (leads.length && !confirm('Add ' + TRAINING.length + ' sample leads to the ' + leads.length + ' already here?')) return;
     const snap = leads; leads = sampleLeads().concat(leads);
     if (!saveLeads()) { leads = snap; el('sampleMsg').textContent = 'Could not save — storage full.'; return; }
     renderData(); el('sampleMsg').textContent = 'Sample leads loaded. ' + leads.length + ' leads stored.';

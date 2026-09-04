@@ -18,7 +18,7 @@ Live: https://bih-mmg.github.io/mmg-crm/
 - **Pipeline** — kanban by stage; drag a card or use ‹ ›.
 - **Dashboard** — counts by stage, destination, owner, source; free-call-to-paid-consult
   conversion; overdue list.
-- **Data** — load 12 sample leads, clear all, export JSON / CSV, restore from file or
+- **Data** — load the 58 sample leads, clear all, export JSON / CSV, restore from file or
   pasted text.
 - **Admin** — mock admin panel behind a PIN (default `0000`, changeable there). Owners
   table: add, rename, remove (leads are reassigned), role (Rep / Partner / Admin), active
@@ -32,7 +32,8 @@ not yet).
 
 ## Notes
 
-- Sample leads are fictional.
+- Sample leads are the 58 fictional practice callers from the Call Training sets — basics only
+  (name, age, home, destination, party, timeline, why). No financials.
 - Currency conversion in the hints uses rough fixed rates; it exists only to compare against
   thresholds.
 - Storage keys are `crm_leads` and `crm_settings`.
