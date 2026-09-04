@@ -140,6 +140,13 @@
   table.admin td .row { flex-wrap: nowrap; }
   table.admin td .row input { min-width: 140px; }
   footer { color: var(--muted); font-size: 11px; text-align: center; padding: 20px 0 0; }
+  .notice { background: var(--warn-bg); color: var(--warn-text); border-bottom: 1px solid var(--border); padding: 10px 16px;
+    text-align: center; font-size: 14px; line-height: 1.4; }
+  .notice b { font-size: 15px; margin-right: 6px; }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
+  .dialog { width: 100%; max-width: 360px; }
+  .dialog h3 { margin-top: 0; }
+  .dialog select { margin-bottom: 12px; }
 </style>
 </head>
 <body>
@@ -154,12 +161,13 @@
   </nav>
   <button class="newbtn" id="newLead">+ New lead</button>
 </header>
+<div class="notice"><b>Demonstration only.</b> This mock CRM exists to show how lead intake could work. It is not MMG’s system of record, so never enter real client, prospect or company details here. Everything in it is fictional and lives only in this browser.</div>
 <main id="main"></main>
 
 <script>
 'use strict';
 // BUILD is checked against the live file after each deploy.
-const BUILD = '2026-09-04-7';
+const BUILD = '2026-09-04-8';
 
 // ---- Reference data ----------------------------------------------------------
 const STAGES = [
@@ -350,6 +358,32 @@ function setPin(pin) {
   pin = String(pin || '').trim();
   if (!/^\d{4,8}$/.test(pin)) return 'PIN must be 4–8 digits.';
   const snap = snapshot(settings); settings.pin = pin; return commitOwners(snap);
+}
+
+// -- Call taker: the intake owner (Admin role) hands off to the rep who takes the free call
+function reps() { return activeOwners().filter(o => settings.ownerMeta[o].role === 'rep'); }
+function needsCallTaker(lead, fromStage, toStage) {
+  if (toStage !== 'held' || fromStage === 'held') return false;
+  const m = settings.ownerMeta[lead.owner];
+  return (!lead.owner || (m && m.role === 'admin')) && reps().length > 0;
+}
+function assignCallTaker(lead, name) {
+  if (!reps().includes(name)) return false;
+  const snap = JSON.stringify(lead);
+  lead.owner = name; lead.updated = new Date().toISOString();
+  addLog(lead, 'Call taken by ' + name + ' — now owner', 'note');
+  if (!saveLeads()) { Object.assign(lead, JSON.parse(snap)); return false; }
+  return true;
+}
+function pickRep(lead, after) {
+  const box = document.createElement('div');
+  box.className = 'overlay'; box.id = 'repPick';
+  box.innerHTML = '<div class="card dialog"><h3>Who took the call?</h3><select id="repSel">' + opts(reps(), reps()[0]) + '</select>' +
+    '<div class="toolbar" style="margin:0"><button class="btn" id="repOk">Set owner</button><button class="btn sec" id="repSkip">Keep ' + esc(lead.owner || 'unassigned') + '</button></div></div>';
+  document.body.appendChild(box);
+  const close = () => { box.remove(); after(); };
+  el('repOk').onclick = () => { if (!assignCallTaker(lead, el('repSel').value)) alert('Could not save the owner change.'); close(); };
+  el('repSkip').onclick = close;
 }
 
 // ---- Screening hints ---------------------------------------------------------
@@ -638,12 +672,13 @@ function saveForm(l) {
   l.consent = fd.get('consent') === 'on';
   l.destinations = fd.getAll('dest');
   const newStage = String(fd.get('stage')), outcome = String(fd.get('outcome') || '');
+  const fromStage = l.stage;
   if (newStage !== l.stage || (newStage === 'closed' && outcome && outcome !== l.outcome)) setStage(l, newStage, outcome);
   else if (newStage === 'closed') l.outcome = outcome || l.outcome || 'notyet';
   l.updated = new Date().toISOString();
   if (!saveLeads()) { Object.assign(l, JSON.parse(snap)); el('saveMsg').textContent = 'Not saved — this site’s storage is full.'; el('saveMsg').classList.add('err'); return; }
-  renderLead(l.id);
-  el('saveMsg').textContent = 'Saved.';
+  const done = () => { renderLead(l.id); el('saveMsg').textContent = 'Saved.'; };
+  if (needsCallTaker(l, fromStage, newStage)) pickRep(l, done); else done();
 }
 
 // -- Pipeline
@@ -683,9 +718,10 @@ function moveLead(l, stage) {
   const snap = JSON.stringify(l);
   let outcome = '';
   if (stage === 'closed') { const o = prompt('Outcome: won, lost or notyet', 'won'); if (o == null) return; outcome = OUTCOMES[o.trim().toLowerCase()] ? o.trim().toLowerCase() : 'notyet'; }
+  const fromStage = l.stage;
   setStage(l, stage, outcome);
   if (!saveLeads()) { Object.assign(l, JSON.parse(snap)); alert('Could not save the change.'); return; }
-  renderPipeline();
+  if (needsCallTaker(l, fromStage, stage)) pickRep(l, renderPipeline); else renderPipeline();
 }
 
 // -- Dashboard

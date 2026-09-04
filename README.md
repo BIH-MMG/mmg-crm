@@ -1,7 +1,9 @@
 # MMG CRM
 
-A dummy lead-intake CRM for MMG (Messina Madrid Global). One HTML file, no backend, no
-dependencies. Everything typed into it stays in the browser's `localStorage`.
+A **mock** lead-intake CRM for MMG (Messina Madrid Global) — a demonstration of the intake
+workflow, not a system of record. Never enter real client, prospect or company details. One
+HTML file, no backend, no dependencies. Everything typed into it stays in the browser's
+`localStorage`.
 
 Live: https://bih-mmg.github.io/mmg-crm/
 
@@ -15,7 +17,9 @@ Live: https://bih-mmg.github.io/mmg-crm/
   Privilege, Malta MPRP / GRP, Canada Express Entry / PNP / sponsorship) computed from the
   saved values against the Ready Reckoner thresholds. Never a processing time, never a
   settlement-funds figure. The consultant confirms.
-- **Pipeline** — kanban by stage; drag a card or use ‹ ›.
+- **Pipeline** — kanban by stage; drag a card or use ‹ ›. Moving a lead to *Free call held*
+  while the intake owner (Admin) still holds it asks which rep took the call and makes them
+  the owner.
 - **Dashboard** — counts by stage, destination, owner, source; free-call-to-paid-consult
   conversion; overdue list.
 - **Data** — load the 58 sample leads, clear all, export JSON / CSV, restore from file or
