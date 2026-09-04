@@ -4,11 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="light dark">
-<!-- MMG CRM — dummy lead-intake CRM. One file, no backend, no dependencies.
-     All data lives in this browser's localStorage under crm_* keys. Keep the prefix:
-     GitHub Pages project pages on one account share a single origin, so any other
-     app published under BIH-MMG.github.io would see these keys. -->
+<!-- MMG CRM — mock lead-intake CRM. One file, no build step.
+     Storage: Firebase Realtime Database (project mmg-crm-3b949) behind an email/password
+     login, so every signed-in browser sees the same leads. localStorage (crm_* keys) is a
+     cache and the fallback when the Firebase SDK is absent (tests, offline file). Keep the
+     crm_ prefix: GitHub Pages project pages on one account share a single origin.
+     The Firebase config below is not a secret; the login and the database rules protect
+     the data (rules: auth != null for read and write). -->
 <title>MMG CRM</title>
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-database-compat.js"></script>
 <style>
   :root {
     --brand: #1F4E79;
@@ -57,6 +63,11 @@
   header nav button.on { color: #fff; border-bottom-color: #fff; }
   header .newbtn { background: #fff; color: var(--brand); border: 0; border-radius: 6px; padding: 7px 14px;
     font: inherit; font-weight: 700; cursor: pointer; }
+  header .signout { background: none; border: 1px solid rgba(255,255,255,.5); color: #fff; border-radius: 6px; padding: 6px 10px;
+    font: inherit; font-size: 12px; cursor: pointer; margin-left: 8px; }
+  .login { max-width: 360px; margin: 48px auto 0; }
+  .login .field { margin-bottom: 12px; }
+  body.locked #tabs, body.locked #newLead { visibility: hidden; }
   main { max-width: 1240px; margin: 0 auto; padding: 18px 16px 60px; }
   h2 { font-size: 18px; margin: 0 0 12px; color: var(--brand); }
   h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 22px 0 8px; }
@@ -160,14 +171,15 @@
     <button data-tab="admin">Admin</button>
   </nav>
   <button class="newbtn" id="newLead">+ New lead</button>
+  <button class="signout" id="signOut" hidden>Sign out</button>
 </header>
-<div class="notice"><b>Demonstration only.</b> This mock CRM exists to show how lead intake could work. It is not MMG’s system of record, so never enter real client, prospect or company details here. Everything in it is fictional and lives only in this browser.</div>
+<div class="notice"><b>Demonstration only.</b> This mock CRM exists to show how lead intake could work. It is not MMG’s system of record, so never enter real client, prospect or company details here. Everything in it is fictional and shared with everyone who has the login.</div>
 <main id="main"></main>
 
 <script>
 'use strict';
 // BUILD is checked against the live file after each deploy.
-const BUILD = '2026-09-04-8';
+const BUILD = '2026-09-04-9';
 
 // ---- Reference data ----------------------------------------------------------
 const STAGES = [
@@ -255,8 +267,117 @@ function normaliseSettings(raw) {
   s.pin = /^\d{4,8}$/.test(String(s.pin)) ? String(s.pin) : PIN_DEFAULT;
   return s;
 }
-function saveLeads() { try { localStorage.setItem('crm_leads', JSON.stringify(leads)); return true; } catch (e) { console.error(e); return false; } }
-function saveSettings() { try { localStorage.setItem('crm_settings', JSON.stringify(settings)); return true; } catch (e) { console.error(e); return false; } }
+function saveLeads() {
+  let ok = true;
+  try { localStorage.setItem('crm_leads', JSON.stringify(leads)); } catch (e) { console.error(e); ok = false; }
+  if (cloudReady()) { cloudPushLeads(); return true; }   // the cloud is the store; the cache filling up is not a failure
+  return ok;
+}
+function saveSettings() {
+  let ok = true;
+  try { localStorage.setItem('crm_settings', JSON.stringify(settings)); } catch (e) { console.error(e); ok = false; }
+  if (cloudReady()) { cloudPushSettings(); return true; }
+  return ok;
+}
+
+// ---- Cloud: Firebase Realtime Database + email/password login -----------------
+// Layout: /leads/{id} = lead object, /settingsJson = settings as one JSON string (owner
+// names contain '.', which RTDB keys cannot). Local arrays stay the working copy; every
+// save diffs against what the cloud last had and writes only the changed nodes.
+const CLOUD = {
+  apiKey: 'AIzaSyC43gspwOsVX_JJ-TYIMpFZnCQtfa7MbQU',
+  authDomain: 'mmg-crm-3b949.firebaseapp.com',
+  databaseURL: 'https://mmg-crm-3b949-default-rtdb.asia-southeast1.firebasedatabase.app',
+  projectId: 'mmg-crm-3b949',
+  appId: '1:775487685793:web:533be1056918fb6f0ddce0',
+};
+let cloud = null;            // { db, user, loaded, off }
+let synced = {};             // lead id -> JSON as the cloud last had it
+let settingsSynced = '';
+function cloudReady() { return !!(cloud && cloud.user); }
+function cloudError(e) { console.error(e); const m = el('cloudMsg'); if (m) m.textContent = 'Cloud write failed: ' + (e && e.message || e); }
+function cloudInit() {
+  if (typeof firebase === 'undefined' || !CLOUD) return false;
+  firebase.initializeApp(CLOUD);
+  cloud = { db: firebase.database(), user: null, loaded: false, off: [] };
+  firebase.auth().onAuthStateChanged(u => {
+    cloud.user = u;
+    if (u) cloudAttach(); else cloudDetach();
+    renderShell();
+  });
+  return true;
+}
+function cloudDetach() { cloud.off.forEach(f => f()); cloud.off = []; cloud.loaded = false; synced = {}; settingsSynced = ''; }
+function mergeCloudLeads(v) {
+  // keep object identity: an open lead form holds a reference into `leads`
+  const byId = {}; leads.forEach(l => { byId[l.id] = l; });
+  const next = []; synced = {};
+  Object.keys(v || {}).forEach(id => {
+    const n = normalise(Object.assign({}, v[id], { id }));
+    let l = byId[id];
+    if (l) { Object.keys(l).forEach(k => delete l[k]); Object.assign(l, n); } else l = n;
+    next.push(l); synced[id] = JSON.stringify(l);
+  });
+  next.sort((a, b) => a.updated < b.updated ? 1 : -1);
+  leads = next;
+  try { localStorage.setItem('crm_leads', JSON.stringify(leads)); } catch (e) {}
+}
+function cloudAttach() {
+  const lr = cloud.db.ref('leads'), sr = cloud.db.ref('settingsJson');
+  lr.on('value', snap => {
+    mergeCloudLeads(snap.val());
+    cloud.loaded = true;
+    if (!view.leadId) render();                 // never repaint under someone mid-edit
+  }, cloudError);
+  sr.on('value', snap => {
+    const j = snap.val();
+    if (typeof j === 'string' && j) {
+      settingsSynced = j;
+      try { settings = normaliseSettings(JSON.parse(j)); } catch (e) { console.error(e); }
+      try { localStorage.setItem('crm_settings', j); } catch (e) {}
+      if (!view.leadId) render();
+    } else if (cloud.user) cloudPushSettings();   // first ever sign-in: seed with the defaults
+  }, cloudError);
+  cloud.off = [() => lr.off(), () => sr.off()];
+}
+function cloudDiffLeads() {
+  const upd = {}, seen = {};
+  leads.forEach(l => { const j = JSON.stringify(l); seen[l.id] = 1; if (synced[l.id] !== j) { upd[l.id] = JSON.parse(j); synced[l.id] = j; } });
+  Object.keys(synced).forEach(id => { if (!seen[id]) { upd[id] = null; delete synced[id]; } });
+  return upd;
+}
+function cloudPushLeads() {
+  const upd = cloudDiffLeads();
+  if (Object.keys(upd).length) cloud.db.ref('leads').update(upd).catch(cloudError);
+}
+function cloudPushSettings() {
+  const j = JSON.stringify(settings);
+  if (j === settingsSynced) return;
+  settingsSynced = j;
+  cloud.db.ref('settingsJson').set(j).catch(cloudError);
+}
+function renderShell() {
+  const locked = !!cloud && !cloud.user;
+  document.body.classList.toggle('locked', locked);
+  el('signOut').hidden = !cloudReady();
+  if (locked) return renderLogin();
+  render();
+}
+function renderLogin() {
+  let remembered = ''; try { remembered = localStorage.getItem('crm_email') || ''; } catch (e) {}
+  main().innerHTML = '<div class="card login"><h3 style="margin-top:0">Sign in</h3><form id="loginForm">' +
+    '<div class="field"><label>Email</label><input type="email" id="loginEmail" autocomplete="username" value="' + esc(remembered) + '" required></div>' +
+    '<div class="field"><label>Password</label><input type="password" id="loginPw" autocomplete="current-password" required></div>' +
+    '<div class="toolbar" style="margin:0"><button class="btn" type="submit" id="loginBtn">Sign in</button></div><div class="msg" id="loginMsg"></div></form></div>';
+  el('loginForm').onsubmit = e => {
+    e.preventDefault();
+    const email = el('loginEmail').value.trim(), pw = el('loginPw').value;
+    el('loginBtn').disabled = true; el('loginMsg').textContent = '';
+    firebase.auth().signInWithEmailAndPassword(email, pw)
+      .then(() => { try { localStorage.setItem('crm_email', email); } catch (e) {} })
+      .catch(err => { el('loginBtn').disabled = false; el('loginMsg').textContent = /invalid|wrong|not-found|credential/i.test(err.code || '') ? 'Wrong email or password.' : ('Sign-in failed: ' + err.message); });
+  };
+}
 
 function blankLead() {
   const now = new Date().toISOString();
@@ -797,7 +918,7 @@ function renderData() {
   let h = '<div class="cols3">';
   h += '<div class="card"><h3 style="margin-top:0">Sample data</h3>' +
     '<div class="toolbar"><button class="btn" id="loadSample">Load sample leads</button><button class="btn danger" id="clearAll">Clear all leads</button></div>' +
-    '<div class="msg" id="sampleMsg">' + leads.length + ' leads stored in this browser.</div></div>';
+    '<div class="msg" id="sampleMsg">' + leads.length + ' leads' + (cloudReady() ? ' in the shared database' : ' stored in this browser') + '.</div></div>';
   h += '<div class="card"><h3 style="margin-top:0">Export</h3>' +
     '<div class="toolbar"><button class="btn" id="dlJson">Download backup (JSON)</button><button class="btn sec" id="dlCsv">Download CSV</button><button class="btn sec" id="copyJson">Copy backup text</button></div>' +
     '<div class="msg" id="exportMsg"></div></div>';
@@ -805,7 +926,7 @@ function renderData() {
     '<div class="toolbar"><input type="file" id="restoreFile" accept=".json,application/json"></div>' +
     '<textarea id="restoreText" placeholder="Or paste backup text here"></textarea>' +
     '<div class="toolbar" style="margin-top:8px"><button class="btn sec" id="restoreBtn">Restore from text</button><span class="msg" id="restoreMsg"></span></div></div>';
-  h += '</div><footer>All data is stored only in this browser (localStorage). Build ' + BUILD + '</footer>';
+  h += '</div><div class="msg" id="cloudMsg"></div><footer>' + (cloudReady() ? 'Shared database · signed in as ' + esc(cloud.user.email) : 'Stored only in this browser (localStorage)') + '. Build ' + BUILD + '</footer>';
   main().innerHTML = h;
 
   el('loadSample').onclick = () => {
@@ -816,7 +937,7 @@ function renderData() {
     renderData(); el('sampleMsg').textContent = 'Sample leads loaded. ' + leads.length + ' leads stored.';
   };
   el('clearAll').onclick = () => {
-    if (!confirm('Delete all ' + leads.length + ' leads? Take a backup first if you want them back.')) return;
+    if (!confirm('Delete all ' + leads.length + ' leads' + (cloudReady() ? ' for everyone' : '') + '? Take a backup first if you want them back.')) return;
     const snap = leads; leads = [];
     if (!saveLeads()) { leads = snap; return; }
     renderData();
@@ -919,7 +1040,9 @@ function boot() {
   loadAll();
   document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
   el('newLead').onclick = newLead;
-  render();
+  el('signOut').onclick = () => { if (cloud) firebase.auth().signOut(); };
+  if (!cloudInit()) render();              // no SDK (tests, offline copy): local mode, render at once
+  else renderShell();                       // shows the login until onAuthStateChanged fires
 }
 if (typeof document !== 'undefined' && document.getElementById('main')) boot();
 </script>

@@ -2,8 +2,8 @@
 
 A **mock** lead-intake CRM for MMG (Messina Madrid Global) — a demonstration of the intake
 workflow, not a system of record. Never enter real client, prospect or company details. One
-HTML file, no backend, no dependencies. Everything typed into it stays in the browser's
-`localStorage`.
+HTML file, no build step. Data lives in a Firebase Realtime Database behind a shared
+email/password login, so everyone who signs in sees the same leads, live.
 
 Live: https://bih-mmg.github.io/mmg-crm/
 
@@ -40,6 +40,10 @@ not yet).
   with generated example.com emails and 555 phone numbers, all at Free call booked.
 - Currency conversion in the hints uses rough fixed rates; it exists only to compare against
   thresholds.
-- Storage keys are `crm_leads` and `crm_settings`.
-- Data never leaves the browser. Use *Download backup* before clearing a browser or
-  switching machines.
+- Storage: Firebase project `mmg-crm-3b949`, Realtime Database in asia-southeast1.
+  `/leads/{id}` holds one lead each; `/settingsJson` holds the settings as a JSON string.
+  Rules are `auth != null` for read and write; the login is created in Firebase
+  Authentication (Email/Password). The Firebase config in `index.html` is not a secret.
+- `localStorage` (`crm_leads`, `crm_settings`, `crm_email`) is a cache. Opened as a plain
+  file without the SDK, the app runs local-only, which is how the test harness drives it.
+- *Clear all leads* clears the shared database for everyone. Download a backup first.
