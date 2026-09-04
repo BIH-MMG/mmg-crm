@@ -159,7 +159,7 @@
 <script>
 'use strict';
 // BUILD is checked against the live file after each deploy.
-const BUILD = '2026-09-04-6';
+const BUILD = '2026-09-04-7';
 
 // ---- Reference data ----------------------------------------------------------
 const STAGES = [
@@ -189,7 +189,8 @@ const FIRM = { none: 'No preference', large: 'Large full-service firm', small: '
 const CURRENCIES = ['USD', 'EUR', 'CAD', 'GBP', 'THB', 'JPY'];
 // Rough rates to USD, for screening hints only.
 const TO_USD = { USD: 1, EUR: 1.08, CAD: 0.73, GBP: 1.27, THB: 0.028, JPY: 0.0067 };
-const OWNERS_DEFAULT = ['Brian H.', 'Ana R.', 'Tom K.'];
+const OWNERS_DEFAULT = ['Admin', 'Brian H.', 'Ana R.', 'Tom K.'];  // 'Admin' is the intake owner: every booking lands there first
+const ROLE_DEFAULT = { Admin: 'admin' };
 const ROLES = { rep: 'Rep', partner: 'Partner', admin: 'Admin' };
 const PIN_DEFAULT = '0000';
 
@@ -241,7 +242,7 @@ function normaliseSettings(raw) {
   if (!s.owners.length) s.owners = OWNERS_DEFAULT.slice();
   const meta = s.ownerMeta && typeof s.ownerMeta === 'object' ? s.ownerMeta : {};
   s.ownerMeta = {};
-  s.owners.forEach(o => { const m = meta[o] || {}; s.ownerMeta[o] = { role: ROLES[m.role] ? m.role : 'rep', active: m.active !== false }; });
+  s.owners.forEach(o => { const m = meta[o] || {}; s.ownerMeta[o] = { role: ROLES[m.role] ? m.role : (ROLE_DEFAULT[o] || 'rep'), active: m.active !== false }; });
   if (!s.owners.includes(s.defaultOwner)) s.defaultOwner = s.owners[0];
   s.pin = /^\d{4,8}$/.test(String(s.pin)) ? String(s.pin) : PIN_DEFAULT;
   return s;
@@ -440,7 +441,7 @@ function sampleLeads() {
       name,
       email: name.toLowerCase().replace(/[“”"]/g, '').replace(/[^a-z ]/g, '').trim().replace(/ +/g, '.') + '@example.com',
       phone: '+1 555 01' + String(i).padStart(2, '0'),
-      consent: true, owner: OWNERS_DEFAULT[i % OWNERS_DEFAULT.length],
+      consent: true, owner: 'Admin',           // intake owner until the call is taken
       stage: 'booked',                 // every training caller has a free call scheduled
       followUp: d((i * 3) % 14),       // the call date, within the next two weeks
     });
@@ -775,6 +776,7 @@ function renderData() {
     if (leads.length && !confirm('Add ' + TRAINING.length + ' sample leads to the ' + leads.length + ' already here?')) return;
     const snap = leads; leads = sampleLeads().concat(leads);
     if (!saveLeads()) { leads = snap; el('sampleMsg').textContent = 'Could not save — storage full.'; return; }
+    if (!settings.owners.includes('Admin')) addOwner('Admin', 'admin');  // older saved settings predate the intake owner
     renderData(); el('sampleMsg').textContent = 'Sample leads loaded. ' + leads.length + ' leads stored.';
   };
   el('clearAll').onclick = () => {
