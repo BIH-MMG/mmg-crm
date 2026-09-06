@@ -182,7 +182,7 @@
 <script>
 'use strict';
 // BUILD is checked against the live file after each deploy.
-const BUILD = '2026-09-06-1';
+const BUILD = '2026-09-06-2';
 
 // ---- Reference data ----------------------------------------------------------
 const STAGES = [
@@ -733,7 +733,7 @@ function renderLead(id) {
   const verdictCls = { fit: 'ok', check: 'warn', unlikely: 'bad', no: 'bad' };
   const verdictTxt = { fit: 'Fit', check: 'Check', unlikely: 'Unlikely', no: 'No' };
   let h = '<div class="toolbar"><button class="btn sec" id="back">‹ Leads</button><h2 style="margin:0;flex:1">' + esc(l.name || 'New lead') + '</h2>' +
-    '<button class="btn danger small" id="del">Delete</button></div>' +
+    '<button class="btn small" type="submit" form="leadForm">Save</button><button class="btn danger small" id="del">Delete</button></div>' +
     '<form id="leadForm" autocomplete="off"><div class="two"><div>';
   const secNote = k => '<textarea class="secnote" name="sn_' + k + '" placeholder="Notes">' + esc(l.secNotes[k] || '') + '</textarea>';
 
@@ -779,6 +779,7 @@ function renderLead(id) {
   h += '<div class="toolbar" style="margin-top:12px"><button class="btn" type="submit">Save</button><span class="msg" id="saveMsg"></span></div></div>';
 
   h += '</div><div>';
+  h += '<div class="toolbar" style="margin-bottom:12px"><button class="btn" type="submit" form="leadForm">Save</button><span class="msg" id="saveMsgTop"></span></div>';
   h += '<div class="card"><h3 style="margin-top:0">Notes</h3><textarea name="notes" class="bignote">' + esc(l.notes) + '</textarea></div>';
   h += '<div class="card" style="margin-top:14px"><h3 style="margin-top:0">Files</h3>' +
     '<div class="row"><input type="file" id="fileInp" multiple style="display:none"><button class="btn small" type="button" id="upload" style="flex:0">Upload</button><span class="msg" id="fileMsg" style="margin:0"></span></div>' +
@@ -879,8 +880,9 @@ function saveForm(l) {
   if (newStage !== l.stage || (newStage === 'closed' && outcome && outcome !== l.outcome)) setStage(l, newStage, outcome);
   else if (newStage === 'closed') l.outcome = outcome || l.outcome || 'notyet';
   l.updated = new Date().toISOString();
-  if (!saveLeads()) { Object.assign(l, JSON.parse(snap)); el('saveMsg').textContent = 'Not saved — this site’s storage is full.'; el('saveMsg').classList.add('err'); return; }
-  const done = () => { renderLead(l.id); el('saveMsg').textContent = 'Saved.'; };
+  const say = (t, err) => ['saveMsg', 'saveMsgTop'].forEach(id => { const m = el(id); if (m) { m.textContent = t; m.classList.toggle('err', !!err); } });
+  if (!saveLeads()) { Object.assign(l, JSON.parse(snap)); say('Not saved — this site’s storage is full.', true); return; }
+  const done = () => { renderLead(l.id); say('Saved.'); };
   if (needsCallTaker(l, fromStage, newStage)) pickRep(l, done); else done();
 }
 
