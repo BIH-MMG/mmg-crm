@@ -182,7 +182,7 @@
 <script>
 'use strict';
 // BUILD is checked against the live file after each deploy.
-const BUILD = '2026-09-06-2';
+const BUILD = '2026-09-06-3';
 
 // ---- Reference data ----------------------------------------------------------
 const STAGES = [
@@ -732,8 +732,8 @@ function renderLead(id) {
   const hints = screeningHints(l);
   const verdictCls = { fit: 'ok', check: 'warn', unlikely: 'bad', no: 'bad' };
   const verdictTxt = { fit: 'Fit', check: 'Check', unlikely: 'Unlikely', no: 'No' };
-  let h = '<div class="toolbar"><button class="btn sec" id="back">‹ Leads</button><h2 style="margin:0;flex:1">' + esc(l.name || 'New lead') + '</h2>' +
-    '<button class="btn small" type="submit" form="leadForm">Save</button><button class="btn danger small" id="del">Delete</button></div>' +
+  let h = '<div class="two" style="margin-bottom:12px"><div class="toolbar" style="margin:0"><button class="btn sec" id="back">‹ Leads</button><h2 style="margin:0;flex:1">' + esc(l.name || 'New lead') + '</h2></div>' +
+    '<div class="toolbar" style="margin:0"><button class="btn" type="submit" form="leadForm">Save</button><span class="msg" id="saveMsgTop" style="margin:0;flex:1"></span><button class="btn danger small" id="del">Delete</button></div></div>' +
     '<form id="leadForm" autocomplete="off"><div class="two"><div>';
   const secNote = k => '<textarea class="secnote" name="sn_' + k + '" placeholder="Notes">' + esc(l.secNotes[k] || '') + '</textarea>';
 
@@ -779,7 +779,6 @@ function renderLead(id) {
   h += '<div class="toolbar" style="margin-top:12px"><button class="btn" type="submit">Save</button><span class="msg" id="saveMsg"></span></div></div>';
 
   h += '</div><div>';
-  h += '<div class="toolbar" style="margin-bottom:12px"><button class="btn" type="submit" form="leadForm">Save</button><span class="msg" id="saveMsgTop"></span></div>';
   h += '<div class="card"><h3 style="margin-top:0">Notes</h3><textarea name="notes" class="bignote">' + esc(l.notes) + '</textarea></div>';
   h += '<div class="card" style="margin-top:14px"><h3 style="margin-top:0">Files</h3>' +
     '<div class="row"><input type="file" id="fileInp" multiple style="display:none"><button class="btn small" type="button" id="upload" style="flex:0">Upload</button><span class="msg" id="fileMsg" style="margin:0"></span></div>' +
