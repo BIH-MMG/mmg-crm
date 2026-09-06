@@ -47,6 +47,10 @@ not yet).
   Firebase Authentication). The Firebase config in `index.html` is not a secret; the API
   key is restricted to `https://bih-mmg.github.io/*` referrers, so the page only connects
   when served from there (a local `file://` copy runs in local-only mode).
-- `localStorage` (`crm_leads`, `crm_settings`) is a cache. Opened as a plain
+- Files attached to a lead are stored in the same database as data URLs, 5 MB per file, any
+  type: `/files/{leadId}/{fileId}` holds the name, size, type and date, `/fileData/{fileId}`
+  the body, so listing a lead's files never downloads the bodies. Deleting a lead deletes
+  its files. Cloud Storage was not used because new Firebase projects need the paid plan.
+- `localStorage` (`crm_leads`, `crm_settings`, `crm_files`, `crm_file_*`) is a cache. Opened as a plain
   file without the SDK, the app runs local-only, which is how the test harness drives it.
 - *Clear all leads* clears the shared database for everyone. Download a backup first.

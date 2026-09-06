@@ -8,7 +8,8 @@
      Storage: Firebase Realtime Database (project mmg-crm-3b949) with anonymous sign-in,
      so every browser that opens the page sees the same leads. Fake data only — anyone
      with the URL can read and write. localStorage (crm_* keys) is a cache and the
-     fallback when the Firebase SDK is absent (tests, offline file). Keep the crm_ prefix:
+     fallback when the Firebase SDK is absent (tests, offline file). Files are stored as
+     data URLs in the same database (/files, /fileData). Keep the crm_ prefix:
      GitHub Pages project pages on one account share a single origin. -->
 <title>MMG CRM</title>
 <script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js"></script>
@@ -73,6 +74,14 @@
     border-radius: 6px; padding: 7px 9px; width: 100%; }
   input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand-light); outline-offset: 0; border-color: transparent; }
   textarea { min-height: 70px; resize: vertical; }
+  textarea.secnote { min-height: 40px; margin-top: 10px; font-size: 13px; }
+  textarea.bignote { min-height: 320px; }
+  .files { list-style: none; padding: 0; margin: 10px 0 0; }
+  .files li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .files li a { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: none; font-weight: 600; }
+  .files li small { color: var(--muted); white-space: nowrap; }
+  .files li button.x { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1; padding: 0 4px; }
+  .files li button.x:hover { color: var(--danger); }
   .toolbar select, .toolbar input[type=search] { width: auto; }
   button.btn { font: inherit; font-weight: 600; background: var(--brand); color: #fff; border: 0; border-radius: 6px;
     padding: 8px 14px; cursor: pointer; }
@@ -173,7 +182,7 @@
 <script>
 'use strict';
 // BUILD is checked against the live file after each deploy.
-const BUILD = '2026-09-04-11';
+const BUILD = '2026-09-06-1';
 
 // ---- Reference data ----------------------------------------------------------
 const STAGES = [
@@ -207,6 +216,8 @@ const OWNERS_DEFAULT = ['Admin', 'Brian H.', 'Ana R.', 'Tom K.'];  // 'Admin' is
 const ROLE_DEFAULT = { Admin: 'admin' };
 const ROLES = { rep: 'Rep', partner: 'Partner', admin: 'Admin' };
 const PIN_DEFAULT = '0000';
+const SEC_KEYS = ['stage', 'contact', 'status', 'party', 'work', 'money', 'intent'];  // per-section notes on the lead form
+const FILE_MAX = 5 * 1024 * 1024;
 
 // ---- Helpers -----------------------------------------------------------------
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
@@ -350,6 +361,46 @@ function cloudPushSettings() {
   settingsSynced = j;
   cloud.db.ref('settingsJson').set(j).catch(cloudError);
 }
+
+// ---- Files: kept as data URLs. Cloud: /files/{leadId}/{fileId} = { name, size, type, t } and
+// /fileData/{fileId} = the data URL, apart so listing a lead's files never downloads bodies.
+// Local-only: crm_files holds all metadata, crm_file_{fileId} each body.
+function localFileMeta() { try { return JSON.parse(localStorage.getItem('crm_files') || '{}') || {}; } catch (e) { return {}; } }
+function listFiles(leadId) {
+  if (cloudReady()) return cloud.db.ref('files/' + leadId).once('value').then(s => s.val() || {});
+  return Promise.resolve(localFileMeta()[leadId] || {});
+}
+function putFile(leadId, meta, dataUrl) {
+  const id = uid();
+  if (cloudReady()) return cloud.db.ref('fileData/' + id).set(dataUrl).then(() => cloud.db.ref('files/' + leadId + '/' + id).set(meta));
+  return new Promise((res, rej) => {
+    try {
+      localStorage.setItem('crm_file_' + id, dataUrl);
+      const m = localFileMeta(); (m[leadId] = m[leadId] || {})[id] = meta;
+      localStorage.setItem('crm_files', JSON.stringify(m)); res();
+    } catch (e) { try { localStorage.removeItem('crm_file_' + id); } catch (e2) {} rej(new Error('this browser’s storage is full')); }
+  });
+}
+function getFileData(id) {
+  if (cloudReady()) return cloud.db.ref('fileData/' + id).once('value').then(s => s.val());
+  return Promise.resolve(localStorage.getItem('crm_file_' + id));
+}
+function deleteFile(leadId, id) {
+  if (cloudReady()) { const u = {}; u['files/' + leadId + '/' + id] = null; u['fileData/' + id] = null; return cloud.db.ref().update(u); }
+  const m = localFileMeta(); if (m[leadId]) delete m[leadId][id];
+  try { localStorage.setItem('crm_files', JSON.stringify(m)); localStorage.removeItem('crm_file_' + id); } catch (e) {}
+  return Promise.resolve();
+}
+function deleteLeadFiles(leadId) {
+  return listFiles(leadId).then(f => Promise.all(Object.keys(f).map(id => deleteFile(leadId, id)))).catch(console.error);
+}
+function fmtSize(n) { return n < 1024 ? n + ' B' : n < 1048576 ? Math.round(n / 1024) + ' KB' : (n / 1048576).toFixed(1) + ' MB'; }
+function isInline(type) { return /^(application\/pdf|image\/|text\/|video\/|audio\/)/.test(type || ''); }
+function dataUrlToBlob(u, type) {
+  const bin = atob(u.slice(u.indexOf(',') + 1)), arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: type || 'application/octet-stream' });
+}
 function blankLead() {
   const now = new Date().toISOString();
   return {
@@ -360,7 +411,7 @@ function blankLead() {
     occupation: '', empMode: '', years: '', education: '',
     income: '', incomeCur: 'USD', incomePer: 'year', incomeType: '', liquid: '', assets: '',
     destinations: [], why: '', timeline: '', visa: '', invest: 'none', investBudget: '', firm: 'none',
-    owner: '', stage: 'new', followUp: '', outcome: '', notes: '',
+    owner: '', stage: 'new', followUp: '', outcome: '', notes: '', secNotes: {},
     log: [],
   };
 }
@@ -368,6 +419,7 @@ function normalise(raw) {
   const l = Object.assign(blankLead(), raw || {});
   if (!Array.isArray(l.destinations)) l.destinations = [];
   if (!Array.isArray(l.log)) l.log = [];
+  if (!l.secNotes || typeof l.secNotes !== 'object') l.secNotes = {};
   if (!STAGE_LABEL[l.stage]) l.stage = 'new';
   return l;
 }
@@ -598,7 +650,7 @@ function filteredLeads() {
     (!view.stage || l.stage === view.stage) &&
     (!view.dest || l.destinations.includes(view.dest)) &&
     (!view.owner || l.owner === view.owner) &&
-    (!q || [l.name, l.email, l.phone, l.nationality, l.resCity, l.occupation, l.why, l.visa, l.notes].join(' ').toLowerCase().includes(q)));
+    (!q || [l.name, l.email, l.phone, l.nationality, l.resCity, l.occupation, l.why, l.visa, l.notes, Object.values(l.secNotes).join(' ')].join(' ').toLowerCase().includes(q)));
   const k = view.sort, dir = view.dir;
   rows.sort((a, b) => {
     let x = a[k], y = b[k];
@@ -683,36 +735,37 @@ function renderLead(id) {
   let h = '<div class="toolbar"><button class="btn sec" id="back">‹ Leads</button><h2 style="margin:0;flex:1">' + esc(l.name || 'New lead') + '</h2>' +
     '<button class="btn danger small" id="del">Delete</button></div>' +
     '<form id="leadForm" autocomplete="off"><div class="two"><div>';
+  const secNote = k => '<textarea class="secnote" name="sn_' + k + '" placeholder="Notes">' + esc(l.secNotes[k] || '') + '</textarea>';
 
   h += '<div class="card"><h3 style="margin-top:0">Status</h3><div class="grid">' +
     field('Stage', sel('stage', l, STAGE_LABEL)) +
     field('Outcome (if closed)', sel('outcome', l, OUTCOMES, '—')) +
     field('Owner', sel('owner', l, ownerChoices(l.owner), '—')) +
     field('Next follow-up', inp('followUp', l, 'date')) +
-    '</div>';
+    '</div>' + secNote('stage');
 
   h += '<h3>Contact</h3><div class="grid">' +
     field('Full name', inp('name', l)) + field('Email', inp('email', l, 'email')) + field('Phone', inp('phone', l, 'tel')) +
     field('Preferred language', sel('lang', l, LANGS)) + field('Lead source', sel('source', l, SOURCES, '—')) +
     field('Consent to contact', '<div class="checks"><label><input type="checkbox" name="consent"' + (l.consent ? ' checked' : '') + '> Agreed to be contacted</label></div>') +
-    '</div>';
+    '</div>' + secNote('contact');
 
   h += '<h3>Current status</h3><div class="grid">' +
     field('Nationality / citizenship', inp('nationality', l)) + field('Country of residence', inp('resCountry', l)) +
-    field('City of residence', inp('resCity', l)) + field('Age', inp('age', l, 'number', ' min="0" max="120"')) + '</div>';
+    field('City of residence', inp('resCity', l)) + field('Age', inp('age', l, 'number', ' min="0" max="120"')) + '</div>' + secNote('status');
 
   h += '<h3>Who’s moving</h3><div class="grid">' +
-    field('Party', sel('party', l, PARTY)) + field('Dependants (ages)', inp('dependants', l, 'text', ' placeholder="e.g. 6, 3"')) + field('Pets', inp('pets', l)) + '</div>';
+    field('Party', sel('party', l, PARTY)) + field('Dependants (ages)', inp('dependants', l, 'text', ' placeholder="e.g. 6, 3"')) + field('Pets', inp('pets', l)) + '</div>' + secNote('party');
 
   h += '<h3>Work</h3><div class="grid">' +
     field('Occupation', inp('occupation', l)) + field('Employment mode', sel('empMode', l, EMP, '—')) +
-    field('Years experience', inp('years', l, 'number', ' min="0"')) + field('Education', inp('education', l)) + '</div>';
+    field('Years experience', inp('years', l, 'number', ' min="0"')) + field('Education', inp('education', l)) + '</div>' + secNote('work');
 
   h += '<h3>Money</h3><div class="grid">' +
     field('Income', '<div class="row">' + inp('income', l, 'text', ' inputmode="decimal" style="flex:2"') + sel('incomeCur', l, CURRENCIES) + sel('incomePer', l, { year: '/ year', month: '/ month' }) + '</div>', 'span2') +
     field('Income type', sel('incomeType', l, INCOME_TYPE, '—')) +
     field('Liquid assets (' + esc(l.incomeCur) + ')', inp('liquid', l, 'text', ' inputmode="decimal"')) +
-    field('Total assets (' + esc(l.incomeCur) + ')', inp('assets', l, 'text', ' inputmode="decimal"')) + '</div>';
+    field('Total assets (' + esc(l.incomeCur) + ')', inp('assets', l, 'text', ' inputmode="decimal"')) + '</div>' + secNote('money');
 
   h += '<h3>Intent</h3><div class="grid">' +
     field('Destination(s)', '<div class="checks">' + DESTS.map(d => '<label><input type="checkbox" name="dest" value="' + d + '"' + (l.destinations.includes(d) ? ' checked' : '') + '> ' + d + '</label>').join('') + '</div>', 'span2') +
@@ -721,13 +774,16 @@ function renderLead(id) {
     field('The why', inp('why', l), 'span2') +
     field('Investment interest', sel('invest', l, INVEST)) +
     field('Property budget (' + esc(l.incomeCur) + ')', inp('investBudget', l, 'text', ' inputmode="decimal"')) +
-    field('Firm preference', sel('firm', l, FIRM)) + '</div>';
+    field('Firm preference', sel('firm', l, FIRM)) + '</div>' + secNote('intent');
 
-  h += '<h3>Notes</h3><textarea name="notes">' + esc(l.notes) + '</textarea>' +
-    '<div class="toolbar" style="margin-top:12px"><button class="btn" type="submit">Save</button><span class="msg" id="saveMsg"></span></div></div>';
+  h += '<div class="toolbar" style="margin-top:12px"><button class="btn" type="submit">Save</button><span class="msg" id="saveMsg"></span></div></div>';
 
   h += '</div><div>';
-  h += '<div class="card"><h3 style="margin-top:0">Screening hints</h3>';
+  h += '<div class="card"><h3 style="margin-top:0">Notes</h3><textarea name="notes" class="bignote">' + esc(l.notes) + '</textarea></div>';
+  h += '<div class="card" style="margin-top:14px"><h3 style="margin-top:0">Files</h3>' +
+    '<div class="row"><input type="file" id="fileInp" multiple style="display:none"><button class="btn small" type="button" id="upload" style="flex:0">Upload</button><span class="msg" id="fileMsg" style="margin:0"></span></div>' +
+    '<ul class="files" id="fileList"><li class="msg">Loading…</li></ul></div>';
+  h += '<div class="card" style="margin-top:14px"><h3 style="margin-top:0">Screening hints</h3>';
   if (!l.destinations.length) h += '<div class="msg">Pick a destination.</div>';
   else if (!hints.length) h += '<div class="msg">Nothing to say yet.</div>';
   else h += hints.map(x => '<div class="hint"><span class="pill ' + verdictCls[x.verdict] + '">' + verdictTxt[x.verdict] + '</span><div><b>' + esc(x.prog) + '</b><span>' + esc(x.note) + '</span></div></div>').join('');
@@ -735,16 +791,40 @@ function renderLead(id) {
 
   h += '<div class="card" style="margin-top:14px"><h3 style="margin-top:0">Activity</h3>' +
     '<div class="row"><input id="noteText" placeholder="Add a note"><button class="btn small" type="button" id="addNote" style="flex:0">Add</button></div>' +
-    '<ul class="log" style="margin-top:10px">' + (l.log.length ? l.log.map(e => '<li><time>' + esc(e.t.replace('T', ' ').slice(0, 16)) + '</time>' + esc(e.text) + '</li>').join('') : '<li class="msg">No activity.</li>') + '</ul></div>';
+    '<ul class="log" id="logList" style="margin-top:10px">' + logHtml(l) + '</ul></div>';
   h += '</div></div></form>';
   main().innerHTML = h;
+  fillFiles(id);
 
   el('back').onclick = () => { view.leadId = null; render(); };
   el('del').onclick = () => {
     if (!confirm('Delete ' + (l.name || 'this lead') + '?')) return;
     const idx = leads.indexOf(l); leads.splice(idx, 1);
     if (!saveLeads()) { leads.splice(idx, 0, l); alert('Could not save the change.'); return; }
+    deleteLeadFiles(l.id);
     view.leadId = null; render();
+  };
+  el('upload').onclick = () => el('fileInp').click();
+  el('fileInp').onchange = () => {
+    const files = Array.from(el('fileInp').files), skipped = [], msg = el('fileMsg');
+    el('fileInp').value = '';
+    let done = 0;
+    const next = i => {
+      if (i >= files.length) {
+        msg.textContent = (done ? 'Uploaded ' + done + '. ' : '') + (skipped.length ? 'Over 5 MB, skipped: ' + skipped.join(', ') : '');
+        fillFiles(id); return;
+      }
+      const f = files[i];
+      if (f.size > FILE_MAX) { skipped.push(f.name); return next(i + 1); }
+      msg.textContent = 'Uploading ' + f.name + ' (' + (i + 1) + '/' + files.length + ')…';
+      const r = new FileReader();
+      r.onload = () => putFile(id, { name: f.name, size: f.size, type: f.type || '', t: new Date().toISOString() }, r.result)
+        .then(() => { done++; addLog(l, 'Uploaded ' + f.name, 'file'); l.updated = new Date().toISOString(); saveLeads(); el('logList').innerHTML = logHtml(l); next(i + 1); })
+        .catch(err => { msg.textContent = 'Upload of ' + f.name + ' failed: ' + (err.message || err); fillFiles(id); });
+      r.onerror = () => { msg.textContent = 'Could not read ' + f.name + '.'; fillFiles(id); };
+      r.readAsDataURL(f);
+    };
+    next(0);
   };
   el('addNote').onclick = () => {
     const t = el('noteText').value.trim(); if (!t) return;
@@ -753,6 +833,36 @@ function renderLead(id) {
     renderLead(id);
   };
   el('leadForm').onsubmit = e => { e.preventDefault(); saveForm(l); };
+}
+function logHtml(l) {
+  return l.log.length ? l.log.map(e => '<li><time>' + esc(e.t.replace('T', ' ').slice(0, 16)) + '</time>' + esc(e.text) + '</li>').join('') : '<li class="msg">No activity.</li>';
+}
+function fillFiles(leadId) {
+  const ul = el('fileList'); if (!ul) return;
+  listFiles(leadId).then(files => {
+    if (view.leadId !== leadId || !el('fileList')) return;
+    const ids = Object.keys(files).sort((a, b) => (files[a].t || '') < (files[b].t || '') ? 1 : -1);
+    ul.innerHTML = ids.length ? ids.map(fid => { const f = files[fid]; return '<li data-id="' + fid + '"><a href="#" data-open>' + esc(f.name) + '</a><small>' + fmtSize(f.size || 0) + ' · ' + esc((f.t || '').slice(0, 10)) + '</small><button type="button" class="x" data-del title="Delete">×</button></li>'; }).join('') : '<li class="msg">No files.</li>';
+    ul.querySelectorAll('li[data-id]').forEach(li => {
+      const fid = li.dataset.id, f = files[fid];
+      li.querySelector('[data-open]').onclick = e => {
+        e.preventDefault();
+        const w = isInline(f.type) ? window.open('', '_blank') : null;   // open in the click, before the async fetch, or popup blockers refuse
+        getFileData(fid).then(d => {
+          if (!d) throw new Error('file data missing');
+          const url = URL.createObjectURL(dataUrlToBlob(d, f.type));
+          if (w) w.location = url;
+          else { const a = document.createElement('a'); a.href = url; a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000); }
+        }).catch(err => { if (w) w.close(); el('fileMsg').textContent = 'Could not open ' + f.name + ': ' + (err.message || err); });
+      };
+      li.querySelector('[data-del]').onclick = () => {
+        if (!confirm('Delete ' + f.name + '?')) return;
+        deleteFile(leadId, fid).then(() => { addLog(l0(), 'Deleted file ' + f.name, 'file'); saveLeads(); const lg = el('logList'); if (lg) lg.innerHTML = logHtml(l0()); fillFiles(leadId); })
+          .catch(err => { el('fileMsg').textContent = 'Could not delete: ' + (err.message || err); });
+      };
+      const l0 = () => findLead(leadId);
+    });
+  }).catch(err => { ul.innerHTML = '<li class="msg">Could not load files: ' + esc(err.message || err) + '</li>'; });
 }
 function saveForm(l) {
   const f = el('leadForm');
@@ -763,6 +873,7 @@ function saveForm(l) {
     'timeline', 'visa', 'why', 'invest', 'investBudget', 'firm', 'owner', 'followUp', 'notes']) l[k] = (fd.get(k) == null ? '' : String(fd.get(k))).trim();
   l.consent = fd.get('consent') === 'on';
   l.destinations = fd.getAll('dest');
+  l.secNotes = {}; for (const k of SEC_KEYS) { const v = fd.get('sn_' + k); if (v != null && String(v).trim()) l.secNotes[k] = String(v).trim(); }
   const newStage = String(fd.get('stage')), outcome = String(fd.get('outcome') || '');
   const fromStage = l.stage;
   if (newStage !== l.stage || (newStage === 'closed' && outcome && outcome !== l.outcome)) setStage(l, newStage, outcome);
